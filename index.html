@@ -279,11 +279,9 @@
   .cat-band .bname{font-size:20px;color:var(--ivory)}
   .cat-band .bcount{font-family:var(--sans);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.18em;color:var(--brass-soft);white-space:nowrap}
   .ret-controls{margin-top:16px;display:grid;gap:12px}
-  @media(min-width:640px){.ret-controls{grid-template-columns:1fr auto;align-items:end}}
-  .ret-controls label{display:block;font-family:var(--sans);font-size:12px;letter-spacing:.14em;color:var(--dim)}
+  .ret-controls label,.ret-controls .ret-sort-label{display:block;font-family:var(--sans);font-size:12px;letter-spacing:.14em;color:var(--dim)}
   .ret-controls input{margin-top:4px;width:100%;border:1px solid var(--border);background:#fff;padding:9px 12px;font-family:var(--sans);font-size:16px;color:var(--text);min-height:44px;border-radius:0}
-  .ret-controls select{margin-top:4px;width:100%;border:1px solid var(--border);background:#fff;padding:9px 8px;font-family:var(--sans);font-size:14px;color:var(--text);min-height:44px;border-radius:0}
-  @media(min-width:640px){.ret-controls select{width:auto}}
+  .ret-sort-chips{margin-top:4px}
   .cat-head{
     border-bottom:1px solid var(--brass);padding-bottom:8px;
     display:flex;align-items:baseline;justify-content:space-between;gap:16px;
@@ -1616,18 +1614,27 @@ function retResultsHTML(){
   }
   return h;
 }
+var RET_SORT_CHIPS = [
+  { key:"lowest", label:"Most lowest prices" },
+  { key:"products", label:"Products tracked" },
+  { key:"name", label:"Name A to Z" }
+];
+function retSortChipsHTML(){
+  return RET_SORT_CHIPS.map(function(chip){
+    var active = retState.sort === chip.key;
+    return '<button type="button" data-ret-sort-chip="' + chip.key + '"' +
+      (active ? ' class="active" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+      esc(chip.label) + '</button>';
+  }).join("");
+}
 function retailersHTML(){
   return '<div class="wrap"><div class="page">' +
     sectionHead("Retailers in the record", "Canadian storefronts only. Marketplace listings are never tracked at any retailer. Coverage and ordering are commission blind.") +
     '<div class="ret-controls">' +
     '<div><label for="retailer-search">SEARCH STORES BY NAME</label>' +
     '<input type="search" id="retailer-search" placeholder="Search stores" value="' + esc(retState.search) + '" autocomplete="off"></div>' +
-    '<div><label for="retailer-sort">SORT</label>' +
-    '<select id="retailer-sort">' +
-    '<option value="lowest"' + (retState.sort === "lowest" ? " selected" : "") + '>Most lowest prices first</option>' +
-    '<option value="products"' + (retState.sort === "products" ? " selected" : "") + '>Products tracked</option>' +
-    '<option value="name"' + (retState.sort === "name" ? " selected" : "") + '>Name A to Z</option>' +
-    '</select></div></div>' +
+    '<div><span class="ret-sort-label">SORT</span>' +
+    '<div class="chips ret-sort-chips" id="retailer-sort-chips" role="group" aria-label="Sort retailers by">' + retSortChipsHTML() + '</div></div></div>' +
     '<div id="ret-results">' + retResultsHTML() + '</div>' +
     '</div></div>';
 }
@@ -1638,12 +1645,24 @@ function bindRetailers(){
     var el = document.getElementById("ret-results");
     if(el) el.innerHTML = retResultsHTML();
   });
-  var sel = document.getElementById("retailer-sort");
-  if(sel) sel.addEventListener("change", function(){
-    retState.sort = sel.value;
-    var el = document.getElementById("ret-results");
-    if(el) el.innerHTML = retResultsHTML();
-  });
+  function paintRetSortChips(){
+    var wrap = document.getElementById("retailer-sort-chips");
+    if(!wrap) return;
+    wrap.innerHTML = retSortChipsHTML();
+    bindRetSortChips();
+  }
+  function bindRetSortChips(){
+    var chips = document.querySelectorAll("[data-ret-sort-chip]");
+    Array.prototype.forEach.call(chips, function(btn){
+      btn.addEventListener("click", function(){
+        retState.sort = btn.getAttribute("data-ret-sort-chip");
+        paintRetSortChips();
+        var el = document.getElementById("ret-results");
+        if(el) el.innerHTML = retResultsHTML();
+      });
+    });
+  }
+  bindRetSortChips();
 }
 
 /* Alerts */
