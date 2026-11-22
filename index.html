@@ -46,6 +46,7 @@
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
+  html,body{overflow-anchor:none}
   body{
     margin:0;background:var(--bg);color:var(--text);
     font-family:var(--serif);font-size:16px;line-height:1.5;
@@ -142,10 +143,14 @@
   .r-first .psub{display:block;font-family:var(--sans);font-size:12px;color:var(--dim)}
   .r-first .sname{font-family:var(--sans);font-size:14px;font-weight:600;letter-spacing:.08em}
   .r-first .snote{display:block;font-family:var(--sans);font-size:12px;line-height:1.6;color:var(--dim)}
-  .r-first .visit{
-    display:inline-block;margin-top:4px;padding:4px 0;font-family:var(--sans);font-size:12px;
-    font-weight:600;letter-spacing:.1em;color:var(--green);text-decoration:underline;text-underline-offset:4px;
+  .buy-btn{
+    display:flex;width:100%;align-items:center;justify-content:center;background:var(--red);color:#fff;
+    text-decoration:none;padding:12px 24px;font-family:var(--sans);font-size:14px;font-weight:600;text-align:center;
   }
+  .buy-btn:hover{background:#A50D26}
+  .price-box .buy-wrap{margin-top:16px}
+  .buy-row{padding:8px 16px 16px}
+  @media(min-width:768px){.buy-row{grid-column:1/-1}}
   .r-cells{display:grid;width:100%;min-width:0;max-width:100%;align-items:start}
   @media(min-width:768px){.r-cells{display:contents}}
   .r-cell{padding:8px 6px;min-width:0}
@@ -299,7 +304,8 @@
     letter-spacing:.12em;color:var(--green);text-decoration:underline;text-underline-offset:4px;min-height:40px;
   }
   .product-photo{margin-bottom:16px;border:1px solid var(--border);background:#fff;padding:16px}
-  .product-photo img{display:block;margin:0 auto;width:100%;max-height:320px;object-fit:contain}
+  .product-photo img{display:block;margin:0 auto;width:100%;height:260px;object-fit:contain}
+  @media(min-width:768px){.product-photo img{height:320px}}
   .product-photo .cap{margin:12px 0 0;font-family:var(--sans);font-size:12px;line-height:1.6;color:var(--dim)}
   .product-title{margin:20px 0 0;font-size:30px;font-weight:400}
   .product-meta{margin:4px 0 0;font-family:var(--sans);font-size:14px;color:var(--dim)}
@@ -828,7 +834,7 @@ function homeHTML(){
 /* Shop */
 var shopState = {
   category:"All", generation:"All",
-  catSort:"lowest", hideUnpriced:false, activeCategory:CATEGORY_ORDER[0],
+  catSort:"lowest", hideUnpriced:false, activeCategory:null,
   search:"", techSub:"All", brandSearch:""
 };
 /* The category the shop results were last painted for. The in category
@@ -996,7 +1002,11 @@ function shopResultsHTML(){
 function shopHTML(){
   var counts = shopCounts();
   var singleView = shopState.category !== "All" && shopState.search.trim() === "";
-  var chips = CATEGORY_ORDER.map(function(c){
+  var allActive = shopState.category === "All" && shopState.activeCategory === null && shopState.search.trim() === "";
+  var chips = '<button type="button" data-jump="All"' +
+    (allActive ? ' class="active" aria-current="true"' : '') + '>All' +
+    ' <span class="cnt">· ' + PRODUCTS.length + '</span></button>';
+  chips += CATEGORY_ORDER.map(function(c){
     var active = singleView ? shopState.category === c : shopState.activeCategory === c;
     return '<button type="button" data-jump="' + esc(c) + '"' +
       (active ? ' class="active" aria-current="true"' : '') + '>' + esc(c) +
@@ -1011,7 +1021,7 @@ function shopHTML(){
     (query === "" ? '' : '<p class="match-note" role="status">' + matchCount + ' product' + (matchCount === 1 ? ' matches' : 's match') + ' your search across the whole catalogue.</p>') +
     '</div>' +
     '<div class="shop-sticky" id="shop-sticky">' +
-    '<div class="chips" role="group" aria-label="Jump to a category">' + chips + '</div>' +
+    '<div class="chips" role="group" aria-label="Choose a category">' + chips + '</div>' +
     '<div class="chips tech-chips" id="tech-chips" role="group" aria-label="Filter Tech by subcategory"' + (techInView() ? '' : ' hidden') + '>' + techChipsHTML() + '</div>' +
     '</div>' +
     '<div class="chips sort-chips" id="shop-sort-chips" role="group" aria-label="Sort products by">' + sortChipsHTML() + '</div>' +
@@ -1025,7 +1035,9 @@ function paintJumpChips(){
   var chips = document.querySelectorAll("[data-jump]");
   Array.prototype.forEach.call(chips, function(btn){
     var c = btn.getAttribute("data-jump");
-    var active = singleView ? shopState.category === c : shopState.activeCategory === c;
+    var active = c === "All"
+      ? (shopState.category === "All" && shopState.activeCategory === null && shopState.search.trim() === "")
+      : (singleView ? shopState.category === c : shopState.activeCategory === c);
     if(active){ btn.classList.add("active"); btn.setAttribute("aria-current","true"); }
     else { btn.classList.remove("active"); btn.removeAttribute("aria-current"); }
   });
@@ -1140,6 +1152,31 @@ function bindShop(){
       refresh();
     });
   }
+  /* Scroll spy for the all categories view only: the active category
+     is the last section whose top has passed a line just under the
+     sticky chip bar, and none (the All chip lit) above the first
+     section. Scanning every section on each observer pass keeps the
+     winner deterministic when two sections touch the line at once;
+     the old per entry pass let whichever entry was processed last
+     win, which could leave a neighbouring category highlighted. */
+  function syncActiveCategory(sections){
+    if(shopState.category !== "All") return;
+    var line = 200, found = null;
+    sections.forEach(function(s){
+      if(s.getBoundingClientRect().top <= line) found = s;
+    });
+    var cat = null;
+    if(found) CATEGORY_ORDER.forEach(function(c){ if(catId(c) === found.id) cat = c; });
+    if(cat === shopState.activeCategory){ paintTechChips(); return; }
+    shopState.activeCategory = cat;
+    paintJumpChips();
+    if(!techInView() && shopState.techSub !== "All"){
+      shopState.techSub = "All";
+      var el = document.getElementById("shop-results");
+      if(el){ el.innerHTML = shopResultsHTML(); bindResultButtons(); observeSections(); return; }
+    }
+    paintTechChips();
+  }
   function observeSections(){
     if(shopObserver){ shopObserver.disconnect(); shopObserver = null; }
     if(!("IntersectionObserver" in window)) return;
@@ -1149,21 +1186,8 @@ function bindShop(){
       if(el) sections.push(el);
     });
     if(!sections.length) return;
-    shopObserver = new IntersectionObserver(function(entries){
-      entries.forEach(function(entry){
-        if(!entry.isIntersecting) return;
-        var cat = null;
-        CATEGORY_ORDER.forEach(function(c){ if(catId(c) === entry.target.id) cat = c; });
-        if(!cat) return;
-        shopState.activeCategory = cat;
-        paintJumpChips();
-        if(shopState.category === "All" && !techInView() && shopState.techSub !== "All"){
-          shopState.techSub = "All";
-          var el = document.getElementById("shop-results");
-          if(el){ el.innerHTML = shopResultsHTML(); bindResultButtons(); observeSections(); }
-        }
-        paintTechChips();
-      });
+    shopObserver = new IntersectionObserver(function(){
+      syncActiveCategory(sections);
     }, { rootMargin:"-120px 0px -60% 0px", threshold:0 });
     sections.forEach(function(s){ shopObserver.observe(s); });
   }
@@ -1171,12 +1195,29 @@ function bindShop(){
   Array.prototype.forEach.call(chips, function(btn){
     btn.addEventListener("click", function(){
       var c = btn.getAttribute("data-jump");
-      shopState.category = "All";
-      shopState.activeCategory = c;
-      paintJumpChips();
+      /* A chip selects its category on its own, the same single
+         category view the category band opens, so the chip highlight,
+         the results and the subcategory row always agree. (The chips
+         used to smooth scroll to the section inside the all view and
+         let a scroll spy set the highlight; two sections touching
+         the spy line at once could leave the previous category lit,
+         and with it the wrong subcategory row showing.) The All chip
+         returns to the full catalogue. Selecting clears any catalogue
+         search, like the band does. */
+      shopState.search = "";
+      var input = document.getElementById("shop-search");
+      if(input) input.value = "";
+      var note = document.querySelector(".shop-search .match-note");
+      if(note && note.parentNode) note.parentNode.removeChild(note);
+      if(c === "All"){
+        shopState.category = "All";
+        shopState.activeCategory = null;
+      } else {
+        shopState.category = c;
+        shopState.activeCategory = c;
+      }
       refresh();
-      var target = document.getElementById(catId(c));
-      if(target) target.scrollIntoView({behavior:"smooth", block:"start"});
+      resetScrollToTop();
     });
   });
   var searchInput = document.getElementById("shop-search");
@@ -1228,11 +1269,27 @@ function productHTML(skuId){
   h += panelHTML(p) + '</div>';
   h += '<h2 class="product-title">' + esc(p.brand) + ' ' + esc(p.model) + '</h2>' +
     '<p class="product-meta">' + esc(p.category) + ' · ' + esc(p.subcategory) + ' · ' + esc(p.generation) + ' generation</p>';
+  var lowestBuyUrl = "";
+  if(p.lowestRetailer){
+    var lowestReads = p.reads.filter(function(r){ return r.retailer === p.lowestRetailer; })
+      .slice().sort(function(a,b){ return b.readDate.localeCompare(a.readDate); });
+    var lowestCurrent = null;
+    lowestReads.forEach(function(r){ if(lowestCurrent == null && r.priceCad != null) lowestCurrent = r; });
+    if(lowestCurrent){
+      lowestBuyUrl = lowestCurrent.productUrl || "";
+      if(!lowestBuyUrl){
+        lowestReads.forEach(function(r){ if(!lowestBuyUrl && r.productUrl) lowestBuyUrl = r.productUrl; });
+      }
+    }
+  }
   h += '<div class="price-box">';
   if(p.lowestPriceCad != null){
     h += '<p class="kicker">LOWEST READ IN THE RECORD</p>' +
       '<p class="big">' + money(p.lowestPriceCad) + '</p>' +
       '<p class="detail">At ' + esc(p.lowestRetailer) + ', read ' + fmtDate(p.lowestReadDate || p.readDate) + '.</p>';
+    if(lowestBuyUrl){
+      h += '<div class="buy-wrap"><a class="buy-btn" href="' + esc(lowestBuyUrl) + '" target="_blank" rel="noreferrer">Buy at ' + esc(p.lowestRetailer) + '</a></div>';
+    }
     if(p.isDrop && p.highPriceCad != null){
       h += '<p class="saves">Saves ' + money(p.savingCad) + ' against the recorded high of ' +
         money(p.highPriceCad) + ' at ' + esc(p.lowestRetailer) + '.</p>';
@@ -1325,9 +1382,6 @@ function productHTML(skuId){
       if(row.saleEndDate){
         h += '<span class="snote">Sale ends ' + esc(fmtDay(row.saleEndDate)) + '</span>';
       }
-      if(row.productUrl){
-        h += '<a class="visit" href="' + esc(row.productUrl) + '" target="_blank" rel="noreferrer">VISIT STORE</a>';
-      }
       h += '</div>';
       h += '<div class="r-cells" ' + mobileGrid + '>';
       h += '<div class="r-cell"><span class="rlabel">PRICE</span>';
@@ -1345,6 +1399,9 @@ function productHTML(skuId){
       h += '<div class="r-cell"><span class="rlabel">READ</span>' +
         '<span class="cell-read">' + fmtDate(row.current.readDate) + '</span></div>';
       h += '</div>';
+      if(row.productUrl){
+        h += '<div class="buy-row"><a class="buy-btn" href="' + esc(row.productUrl) + '" target="_blank" rel="noreferrer">Buy at ' + esc(row.retailer) + '</a></div>';
+      }
       if(row.unsupportedWas){
         h += '<span class="r-note">Original price not matched at any other store.</span>';
       }
@@ -1643,8 +1700,18 @@ document.getElementById("to-top").addEventListener("click", function(){
   window.scrollTo({ top:0, behavior:"smooth" });
   if(scrollerEl) scrollerEl.scrollTo({ top:0, behavior:"smooth" });
 });
+var scrollBehaviorTimer = null;
 function resetScrollToTop(){
-  window.scrollTo({ top:0, left:0, behavior:"auto" });
+  /* The stylesheet sets scroll-behavior:smooth for in page jumps, and
+     a scrollTo with behavior "auto" inherits it: a route change from
+     deep in a list then animated slowly toward the top, and a touch
+     or a late loading photo stopped it partway, so the new page
+     appeared to open midway down. Route resets are instant: smooth
+     is suspended for the reset and restored once it has landed. */
+  var rootEl = document.documentElement;
+  rootEl.style.scrollBehavior = "auto";
+  if(scrollBehaviorTimer){ window.clearTimeout(scrollBehaviorTimer); scrollBehaviorTimer = null; }
+  window.scrollTo(0, 0);
   if(document.scrollingElement){
     document.scrollingElement.scrollTop = 0;
     document.scrollingElement.scrollLeft = 0;
@@ -1658,6 +1725,10 @@ function resetScrollToTop(){
   });
   scrollerEl = null;
   updateChrome(0, window.innerHeight);
+  scrollBehaviorTimer = window.setTimeout(function(){
+    rootEl.style.scrollBehavior = "";
+    scrollBehaviorTimer = null;
+  }, 600);
 }
 
 /* Router */
@@ -1668,6 +1739,7 @@ function route(){
   var app = document.getElementById("app");
   var navName = name;
   if(shopObserver){ shopObserver.disconnect(); shopObserver = null; }
+  resetScrollToTop();
   if(name === "" || name === "home"){ app.innerHTML = homeHTML(); navName = "home"; }
   else if(name === "shop"){ app.innerHTML = shopHTML(); bindShop(); }
   else if(name === "drops"){ app.innerHTML = dropsHTML(); }
