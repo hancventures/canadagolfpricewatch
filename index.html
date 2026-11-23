@@ -357,6 +357,10 @@
   .price-box .kicker{margin:0;font-family:var(--sans);font-size:12px;letter-spacing:.2em;color:var(--dim)}
   .price-box .big{margin:4px 0 0;font-size:48px;line-height:1;color:var(--green)}
   .price-box .detail{margin:12px 0 0;font-family:var(--sans);font-size:14px;line-height:1.65;color:var(--dim)}
+  .delivered-line{font-family:var(--sans);font-size:12px;line-height:1.6;color:var(--dim)}
+  .price-box .delivered-line{margin:8px 0 0;font-size:14px}
+  .ruled .delivered-line{display:block;padding:2px 16px 12px}
+  @media(min-width:768px){.ruled .delivered-line{grid-column:1/-1;padding-top:0}}
   .price-box .saves{margin:8px 0 0;font-family:var(--sans);font-size:14px;font-weight:600;color:var(--red)}
   .price-box .unpriced-big{margin:0;font-size:24px;color:var(--dim)}
   .read-cards{display:grid;gap:16px;margin-top:20px}
@@ -1627,6 +1631,74 @@ function bindShop(){
   });
 }
 
+/* Delivered price, product pages only. The table is transcribed from
+   the delivery terms already in the record: each retailer's stated
+   shipping line gives a flat home delivery fee, a free shipping
+   threshold, or both. Retailers whose stated terms give neither a fee
+   nor a threshold (Not stated, calculated at checkout, store based,
+   fees at checkout only, not applicable) have no entry and never show
+   a delivered line. Costco states shipping included in the price, so
+   its delivered figure is the shelf price itself, free. A product
+   page's own recorded delivery terms take the place of the retailer
+   entry for that retailer where they state a standard fee: the
+   standard fee and the free threshold are read from those terms.
+   (The Golf Town glove terms state a same day fee only, not a
+   standard fee, so they change nothing.) The figure is the price
+   plus the fee with a flat fee; the price alone at or over a free
+   threshold, and the price plus the fee under it when a fee under
+   the threshold is stated; and a figure only at or over the
+   threshold when no under threshold fee is stated. */
+var SHIPPING_TABLE = {
+  "Golf Town": { freeOver:99 },
+  "Sporting Life": { freeOver:99 },
+  "Walmart Canada": { freeOver:35 },
+  "Decathlon": { freeOver:70 },
+  "Golf Avenue": { freeOver:199 },
+  "GlobalGolf Canada": { freeOver:149 },
+  "Canadian Pro Shop Online": { freeOver:99 },
+  "Just Golf Stuff": { fee:14.99, freeOver:100 },
+  "Niagara Golf Warehouse": { freeOver:99.99 },
+  "Golf Vault": { freeOver:99 },
+  "Golf Clearance Warehouse": { freeOver:99 },
+  "Callaway Canada": { freeOver:100 },
+  "Cobra and Puma Golf Canada": { fee:10, freeOver:75 },
+  "Mizuno Canada": { freeOver:75 },
+  "Dunlop Sports Canada": { freeOver:100 },
+  "PXG Canada": { fee:45, freeOver:600 },
+  "Coastal Golf Canada": { fee:11.99, freeOver:150 },
+  "Golf Traders": { freeOver:199 },
+  "Capital Golf Exchange": { freeOver:150 },
+  "GolfBalls.ca": { freeOver:99.99 },
+  "Clicgear Canada": { freeOver:200 },
+  "Ernie's Sports Experts": { freeOver:99 },
+  "Bulzai Golf": { freeOver:199.99 },
+  "Liquidagolf": { fee:20 },
+  "Costco": { included:true }
+};
+function shippingEntryFor(p, retailer){
+  if(p && p.details && p.details.sourceRetailer === retailer && p.details.deliveryTerms){
+    var terms = p.details.deliveryTerms;
+    var feeMatch = /standard shipping:?\s*\$([0-9]+(?:\.[0-9]{2})?)/i.exec(terms);
+    if(feeMatch){
+      var overMatch = /free[^.]*?over\s*\$([0-9]+(?:\.[0-9]{2})?)/i.exec(terms);
+      return { fee:parseFloat(feeMatch[1]), freeOver:overMatch ? parseFloat(overMatch[1]) : null };
+    }
+  }
+  return SHIPPING_TABLE[retailer] || null;
+}
+function deliveredFor(p, retailer, price){
+  if(price == null || !retailer) return null;
+  var entry = shippingEntryFor(p, retailer);
+  if(!entry) return null;
+  if(entry.included) return { amount:price, free:true };
+  if(entry.freeOver != null && price >= entry.freeOver) return { amount:price, free:true };
+  if(entry.fee != null) return { amount:Math.round((price + entry.fee) * 100) / 100, free:false };
+  return null;
+}
+function deliveredText(d){
+  return 'Delivered ' + money(d.amount) + (d.free ? ' · Free' : '');
+}
+
 /* Product page */
 function productHTML(skuId){
   var p = BY_SKU[skuId];
@@ -1664,6 +1736,10 @@ function productHTML(skuId){
     h += '<p class="kicker">LOWEST READ IN THE RECORD</p>' +
       '<p class="big">' + money(p.lowestPriceCad) + '</p>' +
       '<p class="detail">At ' + esc(p.lowestRetailer) + ', read ' + fmtDate(p.lowestReadDate || p.readDate) + '.</p>';
+    var lowestDelivered = deliveredFor(p, p.lowestRetailer, p.lowestPriceCad);
+    if(lowestDelivered){
+      h += '<p class="delivered-line">' + deliveredText(lowestDelivered) + '</p>';
+    }
     if(lowestBuyUrl){
       h += '<div class="buy-wrap"><a class="buy-btn" href="' + esc(lowestBuyUrl) + '" target="_blank" rel="noreferrer">Buy at ' + esc(p.lowestRetailer) + '</a></div>';
     }
@@ -1783,6 +1859,10 @@ function productHTML(skuId){
       h += '<div class="r-cell"><span class="rlabel">READ</span>' +
         '<span class="cell-read">' + fmtDate(row.current.readDate) + '</span></div>';
       h += '</div>';
+      var rowDelivered = deliveredFor(p, row.retailer, price);
+      if(rowDelivered){
+        h += '<span class="delivered-line">' + deliveredText(rowDelivered) + '</span>';
+      }
       if(row.productUrl && storeRows.length > 1){
         h += '<div class="buy-row"><a class="buy-btn" href="' + esc(row.productUrl) + '" target="_blank" rel="noreferrer">Buy at ' + esc(row.retailer) + '</a></div>';
       }
