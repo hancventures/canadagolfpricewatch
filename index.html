@@ -431,7 +431,7 @@
 <div class="slim" id="slim-header" aria-hidden="true">
   <div class="wrap">
     <div class="slim-in">
-      <a class="sbrand" href="#/" data-slim-link tabindex="-1" aria-label="Canada Golf Price Watch home">
+      <a class="sbrand" href="/" data-slim-link tabindex="-1" aria-label="Canada Golf Price Watch home">
         <svg width="30" height="30" viewBox="0 0 120 120" role="img" aria-label="Tag Flag logo">
           <line x1="44" y1="14" x2="44" y2="100" stroke="#FAF7EE" stroke-width="4.4"/>
           <path d="M44 16 L87 16 L101 30 L87 44 L44 44 Z" fill="#C8102E"/>
@@ -442,11 +442,11 @@
         <span class="sname">Canada Golf Price Watch</span>
       </a>
       <nav aria-label="Slim" id="slim-nav">
-        <a href="#/" data-nav="home" tabindex="-1">HOME</a>
-        <a href="#/shop" data-nav="shop" tabindex="-1">SHOP</a>
-        <a href="#/drops" data-nav="drops" tabindex="-1">DROPS</a>
-        <a href="#/retailers" data-nav="retailers" tabindex="-1">RETAILERS</a>
-        <a href="#/alerts" data-nav="alerts" tabindex="-1">ALERTS</a>
+        <a href="/" data-nav="home" tabindex="-1">HOME</a>
+        <a href="/shop" data-nav="shop" tabindex="-1">SHOP</a>
+        <a href="/drops" data-nav="drops" tabindex="-1">DROPS</a>
+        <a href="/retailers" data-nav="retailers" tabindex="-1">RETAILERS</a>
+        <a href="/alerts" data-nav="alerts" tabindex="-1">ALERTS</a>
       </nav>
     </div>
   </div>
@@ -456,7 +456,7 @@
 <header class="site">
   <div class="wrap">
     <div class="masthead">
-      <a class="brand" href="#/" aria-label="Canada Golf Price Watch home">
+      <a class="brand" href="/" aria-label="Canada Golf Price Watch home">
         <svg width="46" height="46" viewBox="0 0 120 120" role="img" aria-label="Tag Flag logo">
           <line x1="44" y1="14" x2="44" y2="100" stroke="#FAF7EE" stroke-width="4.4"/>
           <path d="M44 16 L87 16 L101 30 L87 44 L44 44 Z" fill="#C8102E"/>
@@ -470,11 +470,11 @@
         </span>
       </a>
       <nav class="main" aria-label="Main" id="main-nav">
-        <a href="#/" data-nav="home">HOME</a>
-        <a href="#/shop" data-nav="shop">SHOP</a>
-        <a href="#/drops" data-nav="drops">DROPS</a>
-        <a href="#/retailers" data-nav="retailers">RETAILERS</a>
-        <a href="#/alerts" data-nav="alerts">ALERTS</a>
+        <a href="/" data-nav="home">HOME</a>
+        <a href="/shop" data-nav="shop">SHOP</a>
+        <a href="/drops" data-nav="drops">DROPS</a>
+        <a href="/retailers" data-nav="retailers">RETAILERS</a>
+        <a href="/alerts" data-nav="alerts">ALERTS</a>
       </nav>
     </div>
   </div>
@@ -730,7 +730,7 @@ function panelHTML(p){
 function tileHTML(p){
   var h = '<article class="tile">';
   if(p.isDrop) h += '<span class="drop-flag" aria-label="Price drop">DROP</span>';
-  h += '<a class="panel-link" href="#/product/' + esc(p.skuId) + '" aria-label="View ' +
+  h += '<a class="panel-link" href="' + pathFor("product", p.skuId) + '" aria-label="View ' +
     esc(p.brand + " " + p.model) + '">';
   if(p.photo){
     h += '<span class="tile-photo"><img src="' + esc(p.photo.imageUrl) + '" alt="' +
@@ -753,7 +753,7 @@ function tileHTML(p){
   } else {
     h += '<p class="unpriced">Price not yet recorded</p>';
   }
-  h += '<a class="see" href="#/product/' + esc(p.skuId) + '">SEE THE RECORD</a>';
+  h += '<a class="see" href="' + pathFor("product", p.skuId) + '">SEE THE RECORD</a>';
   h += '</div></article>';
   return h;
 }
@@ -813,7 +813,7 @@ function scorecardHTML(){
     '<span class="r sc-saves-head">SAVES</span></div>';
   rows.forEach(function(e, idx){
     var p = e.product;
-    h += '<a class="r-row' + (idx > 0 ? ' bt' : '') + '" ' + grid + ' href="#/product/' + esc(p.skuId) + '" aria-label="View ' + esc(p.brand + " " + p.model) + '">' +
+    h += '<a class="r-row' + (idx > 0 ? ' bt' : '') + '" ' + grid + ' href="' + pathFor("product", p.skuId) + '" aria-label="View ' + esc(p.brand + " " + p.model) + '">' +
       '<div class="r-first"><span class="pname">' + esc(p.brand) + ' ' + esc(p.model) + '</span>' +
       '<span class="psub">' + esc(p.subcategory) + ' · ' + esc(p.generation) + '</span></div>';
     h += '<div class="r-cells" ' + mobileGrid + '>';
@@ -848,7 +848,7 @@ function homeHTML(){
     '<div class="inner">' +
     '<h2>Never overpay for your golf gear.</h2>' +
     '<p class="lede">Every price read on the retailer own page, recorded daily, with the date on it and the retailer named.</p>' +
-    '<div class="cta"><a class="btn-red" href="#/shop">SHOP THE CATALOGUE</a></div>' +
+    '<div class="cta"><a class="btn-red" href="' + pathFor("shop") + '">SHOP THE CATALOGUE</a></div>' +
     '</div></div>';
   h += '<div class="wrap">';
   var trackedStorefronts = RETAILERS.filter(function(r){ return r.status.indexOf("Tracked") === 0; }).length;
@@ -871,7 +871,7 @@ function homeHTML(){
   } else {
     h += '<div class="tile-grid">' + top.map(tileHTML).join("") + '</div>';
     if(DROPS.length > 3){
-      h += '<p style="margin-top:24px"><a class="back-link" href="#/drops">SEE ALL ' + DROPS.length + ' DROPS</a></p>';
+      h += '<p style="margin-top:24px"><a class="back-link" href="' + pathFor("drops") + '">SEE ALL ' + DROPS.length + ' DROPS</a></p>';
     }
   }
   h += '</section>';
@@ -1411,10 +1411,10 @@ function productHTML(skuId){
   var p = BY_SKU[skuId];
   if(!p){
     return '<div class="wrap"><div class="page"><p style="font-family:var(--sans);font-size:14px">That product is not in the record.</p>' +
-      '<a class="back-link" href="#/shop">BACK TO SHOP</a></div></div>';
+      '<a class="back-link" href="' + pathFor("shop") + '">BACK TO SHOP</a></div></div>';
   }
   var h = '<div class="wrap"><div class="page" style="padding-top:32px">' +
-    '<a class="back-link" href="#/shop">BACK TO SHOP</a>';
+    '<a class="back-link" href="' + pathFor("shop") + '">BACK TO SHOP</a>';
   h += '<div style="position:relative;margin-top:8px">';
   if(p.isDrop) h += '<span class="drop-flag" aria-label="Price drop">DROP</span>';
   if(p.photo){
@@ -1718,7 +1718,7 @@ function computeRetailerStats(){
 var retailerStats = computeRetailerStats();
 var retState = { search:"" };
 function retailerCard(r, showStats){
-  var h = '<a class="ret-card" href="#/shop" data-retailer-card="' + esc(r.name) + '" aria-label="Shop the products at ' + esc(r.name) + '"><h3>' + esc(r.name) + '</h3><p class="site">' + esc(r.website) + '</p>' +
+  var h = '<a class="ret-card" href="' + pathFor("shop") + '" data-retailer-card="' + esc(r.name) + '" aria-label="Shop the products at ' + esc(r.name) + '"><h3>' + esc(r.name) + '</h3><p class="site">' + esc(r.website) + '</p>' +
     '<p class="ship"><strong>Shipping as stated:</strong> ' + esc(r.freeShipping || "Not stated") + '</p>';
   if(showStats){
     var s = retailerStats[r.name];
@@ -1784,7 +1784,7 @@ function retailersHTML(){
 }
 function bindRetailers(){
   /* The whole card is the one link: it sets the retailer filter, then
-     its #/shop address opens Shop on that retailer set alone. */
+     its /shop address opens Shop on that retailer set alone. */
   function bindRetCards(scope){
     var cards = (scope || document).querySelectorAll("[data-retailer-card]");
     Array.prototype.forEach.call(cards, function(card){
@@ -1893,11 +1893,116 @@ function resetScrollToTop(){
   }, 600);
 }
 
-/* Router */
+/* Router: clean addresses. The address bar carries /, /shop, /drops,
+   /retailers, /alerts and /product/<sku>. On the live domain those are
+   the whole path; anywhere the page is served from a sub path, the same
+   routes hang off that base, so a cold load renders the page named by
+   the path alone in both places. Every navigation goes through
+   navigateTo and pathFor, and route() renders whatever the current
+   address names, so Back and Forward restore the view. An old hash
+   address (/#/shop, /#/product/<sku> and friends) still lands on the
+   right page: currentRoute reads it once and rewrites the address to
+   the clean form. */
+var BASE_PATH = computeBasePath();
+function computeBasePath(){
+  var segs = (window.location.pathname || "/").split("/").filter(function(s){ return s !== ""; });
+  if(segs.length && segs[segs.length - 1] === "index.html") segs.pop();
+  if((window.location.hash || "").indexOf("#/") === 0){
+    /* A legacy address carries its route in the hash, so the whole
+       path in front of it is the base. */
+    return "/" + (segs.length ? segs.join("/") + "/" : "");
+  }
+  var last = segs[segs.length - 1] || "", second = segs[segs.length - 2] || "";
+  if(second === "product" && last) segs = segs.slice(0, -2);
+  else if(last === "shop" || last === "drops" || last === "retailers" || last === "alerts") segs = segs.slice(0, -1);
+  return "/" + (segs.length ? segs.join("/") + "/" : "");
+}
+function decodeSeg(s){
+  try{ return decodeURIComponent(s); }catch(e){ return s; }
+}
+function pathFor(name, sku){
+  if(name === "product") return BASE_PATH + "product/" + encodeURIComponent(sku || "");
+  if(!name || name === "home") return BASE_PATH;
+  return BASE_PATH + name;
+}
+function normalizeRoute(name, sku){
+  if(name === "product") return { name:"product", sku:sku || "" };
+  if(name === "shop" || name === "drops" || name === "retailers" || name === "alerts") return { name:name, sku:"" };
+  return { name:"home", sku:"" };
+}
+function routeFromSegments(segs){
+  if(!segs.length) return normalizeRoute("home", "");
+  if(segs[0] === "product") return normalizeRoute("product", decodeSeg(segs[1] || ""));
+  return normalizeRoute(decodeSeg(segs[0]), "");
+}
+function currentRoute(){
+  var hash = window.location.hash || "";
+  if(hash.indexOf("#/") === 0){
+    var legacy = routeFromSegments(hash.replace(/^#\/?/, "").split("/").filter(function(s){ return s !== ""; }));
+    try{ window.history.replaceState(null, "", pathFor(legacy.name, legacy.sku)); }catch(e){}
+    return legacy;
+  }
+  var rest = window.location.pathname || "/";
+  if(BASE_PATH !== "/" && rest.indexOf(BASE_PATH) === 0) rest = "/" + rest.slice(BASE_PATH.length);
+  else if(BASE_PATH !== "/" && rest === BASE_PATH.replace(/\/$/, "")) rest = "/";
+  return routeFromSegments(rest.split("/").filter(function(s){ return s !== ""; }));
+}
+function navigateTo(name, sku){
+  var target = normalizeRoute(name, sku);
+  var url = pathFor(target.name, target.sku);
+  if((window.location.pathname || "/") === url && (window.location.hash || "").indexOf("#/") !== 0) return;
+  try{ window.history.pushState(null, "", url); }catch(e){}
+  route();
+}
+function routeFromHref(href){
+  if(!href) return null;
+  if(href.indexOf("#/") === 0){
+    return routeFromSegments(href.replace(/^#\/?/, "").split("/").filter(function(s){ return s !== ""; }));
+  }
+  if(href.charAt(0) !== "/") return null;
+  var rest = href;
+  if(BASE_PATH !== "/" && rest.indexOf(BASE_PATH) === 0) rest = "/" + rest.slice(BASE_PATH.length);
+  var segs = rest.split("/").filter(function(s){ return s !== ""; });
+  if(!segs.length) return normalizeRoute("home", "");
+  if(segs[0] === "product") return normalizeRoute("product", decodeSeg(segs[1] || ""));
+  if(segs[0] === "shop" || segs[0] === "drops" || segs[0] === "retailers" || segs[0] === "alerts" || segs[0] === "home") return normalizeRoute(segs[0], "");
+  return null;
+}
+/* One delegated handler sends every internal link through navigateTo,
+   so no link performs a bare page load. The retailer cards keep their
+   own click listener, which runs first as the click bubbles and sets
+   the filter navigateTo then renders. Modified clicks and non primary
+   buttons keep the browser own behaviour. */
+document.addEventListener("click", function(e){
+  if(e.button != null && e.button !== 0) return;
+  if(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  var node = e.target, a = null;
+  while(node && node !== document){
+    if(node.tagName === "A"){ a = node; break; }
+    node = node.parentNode;
+  }
+  if(!a) return;
+  var target = routeFromHref(a.getAttribute("href"));
+  if(!target) return;
+  e.preventDefault();
+  navigateTo(target.name, target.sku);
+});
+/* The masthead and slim header links are written with the clean paths
+   of the live domain; under a sub path base they gain the base, so the
+   address a reader sees or copies matches the one navigateTo uses. */
+function fixStaticLinks(){
+  if(BASE_PATH === "/") return;
+  var links = document.querySelectorAll('a[href^="/"]');
+  Array.prototype.forEach.call(links, function(a){
+    var href = a.getAttribute("href");
+    if(href.indexOf(BASE_PATH) === 0) return;
+    a.setAttribute("href", BASE_PATH.replace(/\/$/, "") + href);
+  });
+}
+fixStaticLinks();
 function route(){
-  var hash = window.location.hash || "#/";
-  var parts = hash.replace(/^#\/?/, "").split("/");
-  var name = parts[0] || "home";
+  var current = currentRoute();
+  var name = current.name;
   var app = document.getElementById("app");
   var navName = name;
   if(name !== "shop"){ shopState.retailer = null; }
@@ -1908,7 +2013,7 @@ function route(){
   else if(name === "drops"){ app.innerHTML = dropsHTML(); }
   else if(name === "retailers"){ app.innerHTML = retailersHTML(); bindRetailers(); }
   else if(name === "alerts"){ app.innerHTML = alertsHTML(); }
-  else if(name === "product"){ app.innerHTML = productHTML(parts[1] || ""); navName = "shop"; }
+  else if(name === "product"){ app.innerHTML = productHTML(current.sku || ""); navName = "shop"; }
   else { app.innerHTML = homeHTML(); navName = "home"; }
   var links = document.querySelectorAll("#main-nav a, #slim-nav a");
   Array.prototype.forEach.call(links, function(a){
@@ -1923,6 +2028,7 @@ function route(){
     window.setTimeout(function(){ resetScrollToTop(); }, 450);
   }
 }
+window.addEventListener("popstate", route);
 window.addEventListener("hashchange", route);
 route();
 </script>
