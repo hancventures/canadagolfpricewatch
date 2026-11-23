@@ -463,6 +463,7 @@
         <a href="/shop" data-nav="shop" tabindex="-1">SHOP</a>
         <a href="/drops" data-nav="drops" tabindex="-1">DROPS</a>
         <a href="/gifts" data-nav="gifts" tabindex="-1">GIFTS</a>
+        <a href="/prior" data-nav="prior" tabindex="-1">PRIOR GEN</a>
         <a href="/retailers" data-nav="retailers" tabindex="-1">RETAILERS</a>
         <a href="/alerts" data-nav="alerts" tabindex="-1">ALERTS</a>
       </nav>
@@ -492,6 +493,7 @@
         <a href="/shop" data-nav="shop">SHOP</a>
         <a href="/drops" data-nav="drops">DROPS</a>
         <a href="/gifts" data-nav="gifts">GIFTS</a>
+        <a href="/prior" data-nav="prior">PRIOR GEN</a>
         <a href="/retailers" data-nav="retailers">RETAILERS</a>
         <a href="/alerts" data-nav="alerts">ALERTS</a>
       </nav>
@@ -2243,6 +2245,131 @@ function giftsHTML(){
   return h + '</div></div>';
 }
 
+/* Prior generation watch: every product whose recorded generation is
+   Prior, gathered across all categories. The category chips show only
+   the categories holding at least one Prior product, each with its
+   count, beside an All chip, and the five Shop sort chips order the
+   set, biggest saving first at first. Cards are the standard
+   catalogue cards. */
+var priorState = { category:"All", sort:"saving" };
+function priorProducts(){
+  return PRODUCTS.filter(function(p){ return p.generation === "Prior"; });
+}
+function priorCategoryChipsHTML(){
+  var all = priorProducts();
+  var counts = {};
+  all.forEach(function(p){ counts[p.category] = (counts[p.category] || 0) + 1; });
+  function chip(name, count){
+    var active = priorState.category === name;
+    return '<button type="button" data-prior-category="' + esc(name) + '"' +
+      (active ? ' class="active" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+      esc(name) + ' <span class="cnt">· ' + count + '</span></button>';
+  }
+  var h = chip("All", all.length);
+  CATEGORY_ORDER.forEach(function(c){
+    if(counts[c]) h += chip(c, counts[c]);
+  });
+  return h;
+}
+function priorSortChipsHTML(){
+  return SORT_CHIPS.map(function(chip){
+    var active = priorState.sort === chip.key;
+    return '<button type="button" data-prior-sort="' + chip.key + '"' +
+      (active ? ' class="active" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+      esc(chip.label) + '</button>';
+  }).join("");
+}
+/* The Shop sort orders, applied to the prior generation set: Biggest
+   saving puts products with a recorded saving first, biggest first;
+   Name and Brand read A to Z; price ties fall to lowest price first.
+   Products with no price yet stay last under every sort. */
+function sortPriorList(list){
+  var copy = list.slice();
+  function priceOf(p){ return p.lowestPriceCad == null ? Infinity : p.lowestPriceCad; }
+  function fullName(p){ return p.brand + " " + p.model; }
+  copy.sort(function(a,b){
+    var aMissing = a.lowestPriceCad == null;
+    var bMissing = b.lowestPriceCad == null;
+    if(aMissing !== bMissing) return aMissing ? 1 : -1;
+    if(aMissing && bMissing){
+      if(priorState.sort === "name") return fullName(a).localeCompare(fullName(b));
+      if(priorState.sort === "brand"){
+        var bc = a.brand.localeCompare(b.brand);
+        return bc !== 0 ? bc : a.model.localeCompare(b.model);
+      }
+      return 0;
+    }
+    switch(priorState.sort){
+      case "highest":
+        return priceOf(b) - priceOf(a);
+      case "saving": {
+        var aSave = a.savingCad > 0, bSave = b.savingCad > 0;
+        if(aSave !== bSave) return aSave ? -1 : 1;
+        if(aSave && a.savingCad !== b.savingCad) return b.savingCad - a.savingCad;
+        return priceOf(a) - priceOf(b);
+      }
+      case "name": {
+        var nc = fullName(a).localeCompare(fullName(b));
+        return nc !== 0 ? nc : priceOf(a) - priceOf(b);
+      }
+      case "brand": {
+        var brc = a.brand.localeCompare(b.brand);
+        return brc !== 0 ? brc : priceOf(a) - priceOf(b);
+      }
+      default:
+        return priceOf(a) - priceOf(b);
+    }
+  });
+  return copy;
+}
+function priorListHTML(){
+  var base = priorProducts();
+  var filtered = priorState.category === "All"
+    ? base
+    : base.filter(function(p){ return p.category === priorState.category; });
+  if(!filtered.length) return '<p class="empty-note">No prior generation products in the record.</p>';
+  var list = sortPriorList(filtered);
+  return '<div class="tile-grid">' + list.map(tileHTML).join("") + '</div>';
+}
+function bindPriorCategoryChips(){
+  var chips = document.querySelectorAll("[data-prior-category]");
+  Array.prototype.forEach.call(chips, function(btn){
+    btn.addEventListener("click", function(){
+      priorState.category = btn.getAttribute("data-prior-category");
+      var categoryWrap = document.getElementById("prior-category-chips");
+      if(categoryWrap){ categoryWrap.innerHTML = priorCategoryChipsHTML(); }
+      var el = document.getElementById("prior-results");
+      if(el){ el.innerHTML = priorListHTML(); }
+      bindPriorCategoryChips();
+    });
+  });
+}
+function bindPriorSortChips(){
+  var chips = document.querySelectorAll("[data-prior-sort]");
+  Array.prototype.forEach.call(chips, function(btn){
+    btn.addEventListener("click", function(){
+      priorState.sort = btn.getAttribute("data-prior-sort");
+      var sortWrap = document.getElementById("prior-sort-chips");
+      if(sortWrap){ sortWrap.innerHTML = priorSortChipsHTML(); }
+      var el = document.getElementById("prior-results");
+      if(el){ el.innerHTML = priorListHTML(); }
+      bindPriorSortChips();
+    });
+  });
+}
+function bindPrior(){
+  bindPriorCategoryChips();
+  bindPriorSortChips();
+}
+function priorHTML(){
+  var h = '<div class="wrap"><div class="page">' +
+    sectionHead("Prior generation watch", "Prior generation models across every category, each with its dated reads at Canadian stores.");
+  h += '<div class="chips" id="prior-category-chips" role="group" aria-label="Filter prior generation products by category">' + priorCategoryChipsHTML() + '</div>';
+  h += '<div class="chips sort-chips" id="prior-sort-chips" role="group" aria-label="Sort prior generation products by">' + priorSortChipsHTML() + '</div>';
+  h += '<div id="prior-results">' + priorListHTML() + '</div>';
+  return h + '</div></div>';
+}
+
 /* Retailers */
 function computeRetailerStats(){
   var skus = {}, cats = {}, last = {}, lowest = {};
@@ -2451,7 +2578,7 @@ function resetScrollToTop(){
 }
 
 /* Router: clean addresses. The address bar carries /, /shop, /drops,
-   /gifts, /retailers, /alerts and /product/<sku>. On the live domain those are
+   /gifts, /prior, /retailers, /alerts and /product/<sku>. On the live domain those are
    the whole path; anywhere the page is served from a sub path, the same
    routes hang off that base, so a cold load renders the page named by
    the path alone in both places. Every navigation goes through
@@ -2471,7 +2598,7 @@ function computeBasePath(){
   }
   var last = segs[segs.length - 1] || "", second = segs[segs.length - 2] || "";
   if(second === "product" && last) segs = segs.slice(0, -2);
-  else if(last === "shop" || last === "drops" || last === "gifts" || last === "retailers" || last === "alerts") segs = segs.slice(0, -1);
+  else if(last === "shop" || last === "drops" || last === "gifts" || last === "prior" || last === "retailers" || last === "alerts") segs = segs.slice(0, -1);
   return "/" + (segs.length ? segs.join("/") + "/" : "");
 }
 function decodeSeg(s){
@@ -2484,7 +2611,7 @@ function pathFor(name, sku){
 }
 function normalizeRoute(name, sku){
   if(name === "product") return { name:"product", sku:sku || "" };
-  if(name === "shop" || name === "drops" || name === "gifts" || name === "retailers" || name === "alerts") return { name:name, sku:"" };
+  if(name === "shop" || name === "drops" || name === "gifts" || name === "prior" || name === "retailers" || name === "alerts") return { name:name, sku:"" };
   return { name:"home", sku:"" };
 }
 function routeFromSegments(segs){
@@ -2522,7 +2649,7 @@ function routeFromHref(href){
   var segs = rest.split("/").filter(function(s){ return s !== ""; });
   if(!segs.length) return normalizeRoute("home", "");
   if(segs[0] === "product") return normalizeRoute("product", decodeSeg(segs[1] || ""));
-  if(segs[0] === "shop" || segs[0] === "drops" || segs[0] === "gifts" || segs[0] === "retailers" || segs[0] === "alerts" || segs[0] === "home") return normalizeRoute(segs[0], "");
+  if(segs[0] === "shop" || segs[0] === "drops" || segs[0] === "gifts" || segs[0] === "prior" || segs[0] === "retailers" || segs[0] === "alerts" || segs[0] === "home") return normalizeRoute(segs[0], "");
   return null;
 }
 /* One delegated handler sends every internal link through navigateTo,
@@ -2569,6 +2696,7 @@ function route(){
   else if(name === "shop"){ app.innerHTML = shopHTML(); bindShop(); }
   else if(name === "drops"){ app.innerHTML = dropsHTML(); bindDrops(); }
   else if(name === "gifts"){ app.innerHTML = giftsHTML(); bindGifts(); }
+  else if(name === "prior"){ app.innerHTML = priorHTML(); bindPrior(); }
   else if(name === "retailers"){ app.innerHTML = retailersHTML(); bindRetailers(); }
   else if(name === "alerts"){ app.innerHTML = alertsHTML(); }
   else if(name === "product"){ app.innerHTML = productHTML(current.sku || ""); navName = "shop"; }
