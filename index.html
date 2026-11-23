@@ -225,6 +225,12 @@
     .scorecard .r-cell.sc-saves .rlabel{flex:0 0 auto;text-align:right;color:var(--red)}
     .scorecard .r-cell.sc-saves .cell-saves{font-weight:700}
   }
+  /* Scorecard row photos */
+  .scorecard .r-first.has-photo{display:flex;align-items:center;gap:12px}
+  .scorecard .sc-thumb{flex:0 0 auto;display:block;width:48px;height:48px;border:1px solid var(--border);background:#fff;padding:4px}
+  @media(min-width:768px){.scorecard .sc-thumb{width:56px;height:56px}}
+  .scorecard .sc-thumb img{display:block;width:100%;height:100%;object-fit:contain}
+  .scorecard .r-text{min-width:0}
   a.r-row{display:block;text-decoration:none;cursor:pointer}
   @media(min-width:768px){a.r-row{display:grid}}
   a.r-row:hover{background:#F3EFE0}
@@ -813,9 +819,15 @@ function scorecardHTML(){
     '<span class="r sc-saves-head">SAVES</span></div>';
   rows.forEach(function(e, idx){
     var p = e.product;
-    h += '<a class="r-row' + (idx > 0 ? ' bt' : '') + '" ' + grid + ' href="' + pathFor("product", p.skuId) + '" aria-label="View ' + esc(p.brand + " " + p.model) + '">' +
-      '<div class="r-first"><span class="pname">' + esc(p.brand) + ' ' + esc(p.model) + '</span>' +
-      '<span class="psub">' + esc(p.subcategory) + ' · ' + esc(p.generation) + '</span></div>';
+    h += '<a class="r-row' + (idx > 0 ? ' bt' : '') + '" ' + grid + ' href="' + pathFor("product", p.skuId) + '" aria-label="View ' + esc(p.brand + " " + p.model) + '">';
+    if(p.photo){
+      h += '<div class="r-first has-photo"><span class="sc-thumb"><img src="' + esc(p.photo.imageUrl) + '" alt="" loading="lazy"></span>' +
+        '<span class="r-text"><span class="pname">' + esc(p.brand) + ' ' + esc(p.model) + '</span>' +
+        '<span class="psub">' + esc(p.subcategory) + ' · ' + esc(p.generation) + '</span></span></div>';
+    } else {
+      h += '<div class="r-first"><span class="pname">' + esc(p.brand) + ' ' + esc(p.model) + '</span>' +
+        '<span class="psub">' + esc(p.subcategory) + ' · ' + esc(p.generation) + '</span></div>';
+    }
     h += '<div class="r-cells" ' + mobileGrid + '>';
     cols.forEach(function(c){
       var read = e.byRetailer[c];
