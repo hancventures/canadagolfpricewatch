@@ -2512,7 +2512,34 @@ function alertsHTML(){
 
 /* Page chrome: slim header, back to top, scroll reset */
 var scrollerEl = null;
+var toTopVisible = false;
+var chromeRafId = null;
+function pageScrollerElements(){
+  var els = [];
+  function add(el){ if(el && els.indexOf(el) === -1) els.push(el); }
+  add(document.scrollingElement);
+  add(document.documentElement);
+  add(document.body);
+  add(document.getElementById("app"));
+  var main = document.querySelector("main");
+  add(main);
+  return els;
+}
+function isPageScroller(el){
+  if(!el || el === document || el === window) return true;
+  if(el.nodeType !== 1) return false;
+  return pageScrollerElements().indexOf(el) !== -1;
+}
+function pageScrollTop(){
+  var y = window.scrollY || 0;
+  var els = pageScrollerElements();
+  for(var i = 0; i < els.length; i++){
+    if(typeof els[i].scrollTop === "number" && els[i].scrollTop > y) y = els[i].scrollTop;
+  }
+  return y;
+}
 function updateChrome(y, screen){
+  var viewport = screen || window.innerHeight;
   var slim = document.getElementById("slim-header");
   if(slim){
     if(y > 160){ slim.classList.add("show"); slim.setAttribute("aria-hidden","false"); }
@@ -2524,27 +2551,50 @@ function updateChrome(y, screen){
   }
   var top = document.getElementById("to-top");
   if(top){
-    if(y > screen) top.classList.add("show"); else top.classList.remove("show");
+    if(!toTopVisible && y > viewport) toTopVisible = true;
+    else if(toTopVisible && y < viewport * 0.6) toTopVisible = false;
+    if(toTopVisible) top.classList.add("show"); else top.classList.remove("show");
   }
+}
+function scheduleChromeUpdate(){
+  if(chromeRafId !== null) return;
+  if(typeof window.requestAnimationFrame !== "function"){
+    updateChrome(pageScrollTop(), window.innerHeight);
+    return;
+  }
+  chromeRafId = window.requestAnimationFrame(function(){
+    chromeRafId = null;
+    updateChrome(pageScrollTop(), window.innerHeight);
+  });
 }
 document.addEventListener("scroll", function(e){
   var t = e.target;
-  if(t && t !== document && t.nodeType === 1 && typeof t.scrollTop === "number"){
+  if(t === document || t === window){ scheduleChromeUpdate(); return; }
+  if(t && t.nodeType === 1){
+    if(!isPageScroller(t)) return;
     scrollerEl = t;
-    updateChrome(t.scrollTop, t.clientHeight || window.innerHeight);
-  } else {
-    updateChrome(window.scrollY || 0, window.innerHeight);
+    scheduleChromeUpdate();
+    return;
   }
+  scheduleChromeUpdate();
 }, { capture:true, passive:true });
 window.addEventListener("scroll", function(){
-  updateChrome(window.scrollY || 0, window.innerHeight);
+  scheduleChromeUpdate();
 }, { passive:true });
 window.addEventListener("resize", function(){
-  updateChrome(window.scrollY || 0, window.innerHeight);
+  scheduleChromeUpdate();
 });
 document.getElementById("to-top").addEventListener("click", function(){
   window.scrollTo({ top:0, behavior:"smooth" });
-  if(scrollerEl) scrollerEl.scrollTo({ top:0, behavior:"smooth" });
+  var els = pageScrollerElements();
+  for(var i = 0; i < els.length; i++){
+    if(els[i] && typeof els[i].scrollTo === "function"){
+      try{ els[i].scrollTo({ top:0, behavior:"smooth" }); }catch(e){}
+    }
+  }
+  if(scrollerEl && els.indexOf(scrollerEl) === -1 && typeof scrollerEl.scrollTo === "function"){
+    scrollerEl.scrollTo({ top:0, behavior:"smooth" });
+  }
 });
 var scrollBehaviorTimer = null;
 function resetScrollToTop(){
