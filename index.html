@@ -297,6 +297,7 @@
   .chips button.active{background:var(--green);color:var(--ivory)}
   .chips button.active .cnt{color:var(--ivory)}
   .sort-chips{margin-top:16px}
+  .audience-chips{margin-top:16px}
   .filter-chips{margin-top:8px}
   .filter-chips[hidden]{display:none}
   .filter-toggle{margin-top:8px}
@@ -573,6 +574,24 @@ function esc(s){
 function catId(c){ return "cat-" + c.replace(/[^a-z0-9]+/gi,"-"); }
 function cents(n){ return Math.round(n * 100); }
 
+/* Audience tag, taken only from what the retailer listing states: the
+   product name (brand and model) and the recorded page addresses (the
+   read page addresses and the photo address). Women where it states
+   women's, Lady or Ladies, the Callaway Reva package sets included;
+   Junior where it states junior; Men where it states men's; no tag
+   where it states neither. The women's wording is stripped before the
+   men's test so a women's listing never reads as men's. */
+function audienceOf(p){
+  var parts = [p.brand + " " + p.model];
+  (p.reads || []).forEach(function(r){ if(r.productUrl) parts.push(r.productUrl); });
+  if(p.photo && p.photo.imageUrl) parts.push(p.photo.imageUrl);
+  var t = parts.join(" ").toLowerCase();
+  if(/women|lady|ladies/.test(t) || t.indexOf("reva") !== -1) return "Women";
+  if(t.indexOf("junior") !== -1) return "Junior";
+  if(/men'?s/.test(t.replace(/women'?s?/g, ""))) return "Men";
+  return null;
+}
+
 /* Enrichment mirrors the record rules: the current price at each store
    is its latest priced read; the headline is the lowest of those. A
    store stated was price is flagged when no other store matches it
@@ -646,7 +665,7 @@ function enrich(p){
   }
   return {
     skuId:p.skuId, category:p.category, subcategory:p.subcategory, brand:p.brand,
-    model:p.model, generation:p.generation, anchorRetailer:p.anchorRetailer,
+    model:p.model, generation:p.generation, audience:audienceOf(p), anchorRetailer:p.anchorRetailer,
     priceCad:p.priceCad, wasPriceCad:p.wasPriceCad, readDate:p.readDate, notes:p.notes,
     reads:p.reads, photo:p.photo || null, details:DETAILS_BY_SKU[p.skuId] || null,
     lowestPriceCad:current,
@@ -939,7 +958,7 @@ function homeHTML(){
 
 /* Shop */
 var shopState = {
-  category:"All", generation:"All",
+  category:"All", generation:"All", audience:"All",
   catSort:"lowest", hideUnpriced:false, filtersOpen:false, activeCategory:null,
   search:"", techSub:"All", brandSearch:"", retailer:null
 };
@@ -972,6 +991,28 @@ function shopCounts(){
   var map = {};
   shopBaseProducts().forEach(function(p){ map[p.category] = (map[p.category] || 0) + 1; });
   return map;
+}
+/* Audience counts over the same base set the category counts use, so
+   the chip row and the catalogue always agree. The Junior chip renders
+   only while junior tagged products are in the set. */
+function audienceCounts(){
+  var map = { Men:0, Women:0, Junior:0 };
+  shopBaseProducts().forEach(function(p){ if(p.audience) map[p.audience] += 1; });
+  return map;
+}
+function audienceChipsHTML(){
+  var counts = audienceCounts();
+  function chip(name, count){
+    var active = shopState.audience === name;
+    return '<button type="button" data-audience="' + esc(name) + '"' +
+      (active ? ' class="active" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+      esc(name) + ' <span class="cnt">· ' + count + '</span></button>';
+  }
+  var h = chip("All", shopBaseProducts().length);
+  h += chip("Men", counts.Men);
+  h += chip("Women", counts.Women);
+  if(counts.Junior > 0) h += chip("Junior", counts.Junior);
+  return h;
 }
 /* Tech subcategories come from the subcategory values recorded on Tech
    products, each with its count, sorted by name. */
@@ -1014,6 +1055,7 @@ function shopFiltered(){
       if(haystack.indexOf(query) === -1) return false;
     }
     if(shopState.generation !== "All" && p.generation !== shopState.generation) return false;
+    if(shopState.audience !== "All" && p.audience !== shopState.audience) return false;
     if(shopState.hideUnpriced && p.lowestPriceCad == null) return false;
     if(shopState.techSub !== "All" && p.category === "Tech" && p.subcategory !== shopState.techSub) return false;
     return true;
@@ -1152,6 +1194,7 @@ function shopHTML(){
     '<div class="chips" role="group" aria-label="Choose a category">' + chips + '</div>' +
     '<div class="chips tech-chips" id="tech-chips" role="group" aria-label="Filter Tech by subcategory"' + (techInView() ? '' : ' hidden') + '>' + techChipsHTML() + '</div>' +
     '</div>' +
+    '<div class="chips audience-chips" id="shop-audience-chips" role="group" aria-label="Filter by audience">' + audienceChipsHTML() + '</div>' +
     '<div class="chips sort-chips" id="shop-sort-chips" role="group" aria-label="Sort products by">' + sortChipsHTML() + '</div>' +
     '<div class="chips filter-toggle"><button type="button" id="shop-filters-toggle" data-filters-toggle="1"' +
     ((shopState.generation !== "All" || shopState.hideUnpriced) ? ' class="active"' : '') +
@@ -1211,6 +1254,7 @@ function bindShop(){
       lastShopCategory = shopState.category;
     }
     paintJumpChips();
+    paintAudienceChips();
     paintSortChips();
     paintFilterChips();
     paintFiltersChrome();
@@ -1286,6 +1330,21 @@ function bindShop(){
         var name = btn.getAttribute("data-tech-sub");
         shopState.techSub = (shopState.techSub === name) ? "All" : name;
         paintTechChips();
+        refresh();
+      });
+    });
+  }
+  function paintAudienceChips(){
+    var wrap = document.getElementById("shop-audience-chips");
+    if(!wrap) return;
+    wrap.innerHTML = audienceChipsHTML();
+    bindAudienceChips();
+  }
+  function bindAudienceChips(){
+    var chips = document.querySelectorAll("[data-audience]");
+    Array.prototype.forEach.call(chips, function(btn){
+      btn.addEventListener("click", function(){
+        shopState.audience = btn.getAttribute("data-audience");
         refresh();
       });
     });
@@ -1433,6 +1492,7 @@ function bindShop(){
     }
     refresh();
   });
+  bindAudienceChips();
   bindSortChips();
   bindFilterChips();
   bindFiltersToggle();
