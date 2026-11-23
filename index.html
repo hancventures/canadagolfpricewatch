@@ -871,7 +871,51 @@ function scorecardHTML(){
 }
 
 /* Home */
-var flaggedState = { category:"All" };
+var flaggedState = { category:"All", sort:"saving" };
+/* Drop sort chips shared by Flagged today on Home and the Drops page:
+   Biggest saving, Lowest price and Highest price. Biggest saving is
+   the default on both lists. The chosen sort orders the cards inside
+   whichever category chip view is open on Home, and the All view top
+   three follows the same chosen order. On the Drops page the same
+   three chips order the full drop list. Products with no recorded
+   price stay last under every sort. */
+var DROP_SORT_CHIPS = [
+  { key:"saving", label:"Biggest saving" },
+  { key:"lowest", label:"Lowest price" },
+  { key:"highest", label:"Highest price" }
+];
+function dropSortChipsHTML(current, attr){
+  return DROP_SORT_CHIPS.map(function(chip){
+    var active = current === chip.key;
+    return '<button type="button" ' + attr + '="' + chip.key + '"' +
+      (active ? ' class="active" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+      esc(chip.label) + '</button>';
+  }).join("");
+}
+function sortDropList(list, sortKey){
+  var copy = list.slice();
+  function priceOf(p){ return p.lowestPriceCad == null ? Infinity : p.lowestPriceCad; }
+  copy.sort(function(a,b){
+    var aMissing = a.lowestPriceCad == null;
+    var bMissing = b.lowestPriceCad == null;
+    if(aMissing !== bMissing) return aMissing ? 1 : -1;
+    if(aMissing && bMissing) return b.savingCad - a.savingCad;
+    if(sortKey === "highest"){
+      var hd = priceOf(b) - priceOf(a);
+      return hd !== 0 ? hd : b.savingCad - a.savingCad;
+    }
+    if(sortKey === "lowest"){
+      var ld = priceOf(a) - priceOf(b);
+      return ld !== 0 ? ld : b.savingCad - a.savingCad;
+    }
+    if(b.savingCad !== a.savingCad) return b.savingCad - a.savingCad;
+    return priceOf(a) - priceOf(b);
+  });
+  return copy;
+}
+function flaggedSortChipsHTML(){
+  return dropSortChipsHTML(flaggedState.sort, "data-flagged-sort");
+}
 function flaggedChipsHTML(){
   var counts = {};
   DROPS.forEach(function(p){ counts[p.category] = (counts[p.category] || 0) + 1; });
@@ -888,12 +932,14 @@ function flaggedChipsHTML(){
   return h;
 }
 function flaggedListHTML(){
-  var list = flaggedState.category === "All"
-    ? DROPS.slice(0,3)
+  var base = flaggedState.category === "All"
+    ? DROPS.slice()
     : DROPS.filter(function(p){ return p.category === flaggedState.category; });
+  var list = sortDropList(base, flaggedState.sort);
+  if(flaggedState.category === "All") list = list.slice(0,3);
   return '<div class="tile-grid">' + list.map(tileHTML).join("") + '</div>';
 }
-function bindHome(){
+function bindFlaggedCategoryChips(){
   var chips = document.querySelectorAll("[data-flagged-category]");
   Array.prototype.forEach.call(chips, function(btn){
     btn.addEventListener("click", function(){
@@ -902,9 +948,26 @@ function bindHome(){
       if(chipWrap){ chipWrap.innerHTML = flaggedChipsHTML(); }
       var el = document.getElementById("flagged-results");
       if(el){ el.innerHTML = flaggedListHTML(); }
-      bindHome();
+      bindFlaggedCategoryChips();
     });
   });
+}
+function bindFlaggedSortChips(){
+  var chips = document.querySelectorAll("[data-flagged-sort]");
+  Array.prototype.forEach.call(chips, function(btn){
+    btn.addEventListener("click", function(){
+      flaggedState.sort = btn.getAttribute("data-flagged-sort");
+      var chipWrap = document.getElementById("flagged-sort-chips");
+      if(chipWrap){ chipWrap.innerHTML = flaggedSortChipsHTML(); }
+      var el = document.getElementById("flagged-results");
+      if(el){ el.innerHTML = flaggedListHTML(); }
+      bindFlaggedSortChips();
+    });
+  });
+}
+function bindHome(){
+  bindFlaggedCategoryChips();
+  bindFlaggedSortChips();
 }
 function homeHTML(){
   var h = '<div class="hero">' +
@@ -935,6 +998,7 @@ function homeHTML(){
     h += '<p class="empty-note">No drops in the record yet. The first reads were taken on ' + fmtDate(LATEST_DATE) + '.</p>';
   } else {
     h += '<div class="chips" id="flagged-chips" role="group" aria-label="Filter flagged drops by category">' + flaggedChipsHTML() + '</div>';
+    h += '<div class="chips sort-chips" id="flagged-sort-chips" role="group" aria-label="Sort flagged drops by">' + flaggedSortChipsHTML() + '</div>';
     h += '<div id="flagged-results">' + flaggedListHTML() + '</div>';
     if(DROPS.length > 3){
       h += '<p style="margin-top:24px"><a class="back-link" href="' + pathFor("drops") + '">SEE ALL ' + DROPS.length + ' DROPS</a></p>';
@@ -959,7 +1023,7 @@ function homeHTML(){
 /* Shop */
 var shopState = {
   category:"All", generation:"All", audience:"All",
-  catSort:"lowest", hideUnpriced:false, filtersOpen:false, activeCategory:null,
+  catSort:null, hideUnpriced:false, filtersOpen:false, activeCategory:null,
   search:"", techSub:"All", brandSearch:"", retailer:null
 };
 /* The category the shop results were last painted for. The in category
@@ -1064,9 +1128,14 @@ function shopFiltered(){
 /* Sort chips shown above the product lists in both the all categories
    view and a single category view: the choice lives in shopState.catSort,
    so it is remembered as the reader moves between categories during the
-   same visit and applies to each one opened. Products with no recorded
-   saving sort after those with one under Biggest saving; products with
-   no price yet stay last under every sort. */
+   same visit and applies to each one opened. No sort is chosen at first
+   (catSort null): the all categories view then shows its category bands
+   with each band in the default lowest first order, and a single category
+   view likewise. Picking a sort in the all categories view drops the
+   bands and sorts the whole filtered catalogue as one flat list; tapping
+   the active chip again clears the sort and the bands return. Products
+   with no recorded saving sort after those with one under Biggest
+   saving; products with no price yet stay last under every sort. */
 function sortByChip(list){
   var copy = list.slice();
   function priceOf(p){ return p.lowestPriceCad == null ? Infinity : p.lowestPriceCad; }
@@ -1130,6 +1199,16 @@ function shopResultsHTML(){
   var filtered = shopFiltered();
   var query = shopState.search.trim().toLowerCase();
   var singleView = shopState.category !== "All" && query === "";
+  /* All categories view with a sort chosen: the category bands drop
+     away and the whole filtered catalogue renders as one flat grid
+     sorted across every category, so Highest price puts the dearest
+     product on the site at the top. Clearing the sort (catSort null)
+     brings the bands back. */
+  if(shopState.category === "All" && shopState.catSort != null){
+    if(!filtered.length) return '<p class="empty-note">No products match those filters in the record.</p>';
+    var flatList = sortByChip(filtered);
+    return '<div class="tile-grid">' + flatList.map(tileHTML).join("") + '</div>';
+  }
   var visible = CATEGORY_ORDER.filter(function(c){
     return (query !== "" || shopState.category === "All" || shopState.category === c) &&
       filtered.some(function(p){ return p.category === c; });
@@ -1306,7 +1385,10 @@ function bindShop(){
     var chips = document.querySelectorAll("[data-sort-chip]");
     Array.prototype.forEach.call(chips, function(btn){
       btn.addEventListener("click", function(){
-        shopState.catSort = btn.getAttribute("data-sort-chip");
+        var key = btn.getAttribute("data-sort-chip");
+        /* Tapping the active sort chip again clears the sort; in the
+           all categories view that brings the category bands back. */
+        shopState.catSort = (shopState.catSort === key) ? null : key;
         refresh();
       });
     });
@@ -1782,13 +1864,35 @@ function productHTML(skuId){
 }
 
 /* Drops */
+var dropsState = { sort:"saving" };
+function dropsSortChipsHTML(){
+  return dropSortChipsHTML(dropsState.sort, "data-drops-sort");
+}
+function dropsListHTML(){
+  var list = sortDropList(DROPS, dropsState.sort);
+  return '<div class="tile-grid">' + list.map(tileHTML).join("") + '</div>';
+}
+function bindDrops(){
+  var chips = document.querySelectorAll("[data-drops-sort]");
+  Array.prototype.forEach.call(chips, function(btn){
+    btn.addEventListener("click", function(){
+      dropsState.sort = btn.getAttribute("data-drops-sort");
+      var chipWrap = document.getElementById("drops-sort-chips");
+      if(chipWrap){ chipWrap.innerHTML = dropsSortChipsHTML(); }
+      var el = document.getElementById("drops-results");
+      if(el){ el.innerHTML = dropsListHTML(); }
+      bindDrops();
+    });
+  });
+}
 function dropsHTML(){
   var h = '<div class="wrap"><div class="page">' +
     sectionHead("Drops", "A drop counts only when the current read sits at least 1 percent or at least $2 under the list price or the recorded high. Biggest saving first.");
   if(!DROPS.length){
     h += '<p class="empty-note">No qualifying drops in the record yet.</p>';
   } else {
-    h += '<div class="tile-grid">' + DROPS.map(tileHTML).join("") + '</div>';
+    h += '<div class="chips sort-chips" id="drops-sort-chips" role="group" aria-label="Sort drops by">' + dropsSortChipsHTML() + '</div>';
+    h += '<div id="drops-results">' + dropsListHTML() + '</div>';
   }
   return h + '</div></div>';
 }
@@ -2117,7 +2221,7 @@ function route(){
   resetScrollToTop();
   if(name === "" || name === "home"){ app.innerHTML = homeHTML(); bindHome(); navName = "home"; }
   else if(name === "shop"){ app.innerHTML = shopHTML(); bindShop(); }
-  else if(name === "drops"){ app.innerHTML = dropsHTML(); }
+  else if(name === "drops"){ app.innerHTML = dropsHTML(); bindDrops(); }
   else if(name === "retailers"){ app.innerHTML = retailersHTML(); bindRetailers(); }
   else if(name === "alerts"){ app.innerHTML = alertsHTML(); }
   else if(name === "product"){ app.innerHTML = productHTML(current.sku || ""); navName = "shop"; }
