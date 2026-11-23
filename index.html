@@ -452,6 +452,7 @@
         <a href="/" data-nav="home" tabindex="-1">HOME</a>
         <a href="/shop" data-nav="shop" tabindex="-1">SHOP</a>
         <a href="/drops" data-nav="drops" tabindex="-1">DROPS</a>
+        <a href="/gifts" data-nav="gifts" tabindex="-1">GIFTS</a>
         <a href="/retailers" data-nav="retailers" tabindex="-1">RETAILERS</a>
         <a href="/alerts" data-nav="alerts" tabindex="-1">ALERTS</a>
       </nav>
@@ -480,6 +481,7 @@
         <a href="/" data-nav="home">HOME</a>
         <a href="/shop" data-nav="shop">SHOP</a>
         <a href="/drops" data-nav="drops">DROPS</a>
+        <a href="/gifts" data-nav="gifts">GIFTS</a>
         <a href="/retailers" data-nav="retailers">RETAILERS</a>
         <a href="/alerts" data-nav="alerts">ALERTS</a>
       </nav>
@@ -1897,6 +1899,151 @@ function dropsHTML(){
   return h + '</div></div>';
 }
 
+/* Gifts: every product whose lowest recorded price sits under the
+   chosen ceiling, gathered across all categories. The ceiling chips
+   carry the count under each ceiling; Under $50 is the opening view.
+   Inside a ceiling, the category chips show only the categories
+   holding at least one product under it, each with its count, and the
+   five Shop sort chips order the set, lowest price first at first.
+   Changing the ceiling returns the category filter to All. Cards are
+   the standard catalogue cards. */
+var GIFT_CEILINGS = [25, 50, 100];
+var giftsState = { ceiling:50, category:"All", sort:"lowest" };
+function giftProducts(ceiling){
+  return PRODUCTS.filter(function(p){
+    return p.lowestPriceCad != null && p.lowestPriceCad < ceiling;
+  });
+}
+function giftCeilingChipsHTML(){
+  return GIFT_CEILINGS.map(function(c){
+    var active = giftsState.ceiling === c;
+    return '<button type="button" data-gift-ceiling="' + c + '"' +
+      (active ? ' class="active" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+      'Under $' + c + ' <span class="cnt">· ' + giftProducts(c).length + '</span></button>';
+  }).join("");
+}
+function giftCategoryChipsHTML(){
+  var inCeiling = giftProducts(giftsState.ceiling);
+  var counts = {};
+  inCeiling.forEach(function(p){ counts[p.category] = (counts[p.category] || 0) + 1; });
+  function chip(name, count){
+    var active = giftsState.category === name;
+    return '<button type="button" data-gift-category="' + esc(name) + '"' +
+      (active ? ' class="active" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+      esc(name) + ' <span class="cnt">· ' + count + '</span></button>';
+  }
+  var h = chip("All", inCeiling.length);
+  CATEGORY_ORDER.forEach(function(c){
+    if(counts[c]) h += chip(c, counts[c]);
+  });
+  return h;
+}
+function giftSortChipsHTML(){
+  return SORT_CHIPS.map(function(chip){
+    var active = giftsState.sort === chip.key;
+    return '<button type="button" data-gift-sort="' + chip.key + '"' +
+      (active ? ' class="active" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+      esc(chip.label) + '</button>';
+  }).join("");
+}
+/* The Shop sort orders, applied to the gift set: Biggest saving puts
+   products with a recorded saving first, biggest first; Name and
+   Brand read A to Z; price ties fall to lowest price first. */
+function sortGiftList(list){
+  var copy = list.slice();
+  function priceOf(p){ return p.lowestPriceCad == null ? Infinity : p.lowestPriceCad; }
+  function fullName(p){ return p.brand + " " + p.model; }
+  copy.sort(function(a,b){
+    switch(giftsState.sort){
+      case "highest":
+        return priceOf(b) - priceOf(a);
+      case "saving": {
+        var aSave = a.savingCad > 0, bSave = b.savingCad > 0;
+        if(aSave !== bSave) return aSave ? -1 : 1;
+        if(aSave && a.savingCad !== b.savingCad) return b.savingCad - a.savingCad;
+        return priceOf(a) - priceOf(b);
+      }
+      case "name": {
+        var nc = fullName(a).localeCompare(fullName(b));
+        return nc !== 0 ? nc : priceOf(a) - priceOf(b);
+      }
+      case "brand": {
+        var brc = a.brand.localeCompare(b.brand);
+        return brc !== 0 ? brc : priceOf(a) - priceOf(b);
+      }
+      default:
+        return priceOf(a) - priceOf(b);
+    }
+  });
+  return copy;
+}
+function giftsListHTML(){
+  var base = giftProducts(giftsState.ceiling);
+  var filtered = giftsState.category === "All"
+    ? base
+    : base.filter(function(p){ return p.category === giftsState.category; });
+  if(!filtered.length) return '<p class="empty-note">No products under that ceiling in the record.</p>';
+  var list = sortGiftList(filtered);
+  return '<div class="tile-grid">' + list.map(tileHTML).join("") + '</div>';
+}
+function bindGiftCeilingChips(){
+  var chips = document.querySelectorAll("[data-gift-ceiling]");
+  Array.prototype.forEach.call(chips, function(btn){
+    btn.addEventListener("click", function(){
+      giftsState.ceiling = Number(btn.getAttribute("data-gift-ceiling"));
+      giftsState.category = "All";
+      var ceilingWrap = document.getElementById("gifts-ceiling-chips");
+      if(ceilingWrap){ ceilingWrap.innerHTML = giftCeilingChipsHTML(); }
+      var categoryWrap = document.getElementById("gifts-category-chips");
+      if(categoryWrap){ categoryWrap.innerHTML = giftCategoryChipsHTML(); }
+      var el = document.getElementById("gifts-results");
+      if(el){ el.innerHTML = giftsListHTML(); }
+      bindGiftCeilingChips();
+      bindGiftCategoryChips();
+    });
+  });
+}
+function bindGiftCategoryChips(){
+  var chips = document.querySelectorAll("[data-gift-category]");
+  Array.prototype.forEach.call(chips, function(btn){
+    btn.addEventListener("click", function(){
+      giftsState.category = btn.getAttribute("data-gift-category");
+      var categoryWrap = document.getElementById("gifts-category-chips");
+      if(categoryWrap){ categoryWrap.innerHTML = giftCategoryChipsHTML(); }
+      var el = document.getElementById("gifts-results");
+      if(el){ el.innerHTML = giftsListHTML(); }
+      bindGiftCategoryChips();
+    });
+  });
+}
+function bindGiftSortChips(){
+  var chips = document.querySelectorAll("[data-gift-sort]");
+  Array.prototype.forEach.call(chips, function(btn){
+    btn.addEventListener("click", function(){
+      giftsState.sort = btn.getAttribute("data-gift-sort");
+      var sortWrap = document.getElementById("gifts-sort-chips");
+      if(sortWrap){ sortWrap.innerHTML = giftSortChipsHTML(); }
+      var el = document.getElementById("gifts-results");
+      if(el){ el.innerHTML = giftsListHTML(); }
+      bindGiftSortChips();
+    });
+  });
+}
+function bindGifts(){
+  bindGiftCeilingChips();
+  bindGiftCategoryChips();
+  bindGiftSortChips();
+}
+function giftsHTML(){
+  var h = '<div class="wrap"><div class="page">' +
+    sectionHead("Gifts", "Golf gear under a set price. Every price read at a Canadian store, with the date on it.");
+  h += '<div class="chips" id="gifts-ceiling-chips" role="group" aria-label="Choose a price ceiling">' + giftCeilingChipsHTML() + '</div>';
+  h += '<div class="chips" id="gifts-category-chips" role="group" aria-label="Filter gifts by category">' + giftCategoryChipsHTML() + '</div>';
+  h += '<div class="chips sort-chips" id="gifts-sort-chips" role="group" aria-label="Sort gifts by">' + giftSortChipsHTML() + '</div>';
+  h += '<div id="gifts-results">' + giftsListHTML() + '</div>';
+  return h + '</div></div>';
+}
+
 /* Retailers */
 function computeRetailerStats(){
   var skus = {}, cats = {}, last = {}, lowest = {};
@@ -2105,7 +2252,7 @@ function resetScrollToTop(){
 }
 
 /* Router: clean addresses. The address bar carries /, /shop, /drops,
-   /retailers, /alerts and /product/<sku>. On the live domain those are
+   /gifts, /retailers, /alerts and /product/<sku>. On the live domain those are
    the whole path; anywhere the page is served from a sub path, the same
    routes hang off that base, so a cold load renders the page named by
    the path alone in both places. Every navigation goes through
@@ -2125,7 +2272,7 @@ function computeBasePath(){
   }
   var last = segs[segs.length - 1] || "", second = segs[segs.length - 2] || "";
   if(second === "product" && last) segs = segs.slice(0, -2);
-  else if(last === "shop" || last === "drops" || last === "retailers" || last === "alerts") segs = segs.slice(0, -1);
+  else if(last === "shop" || last === "drops" || last === "gifts" || last === "retailers" || last === "alerts") segs = segs.slice(0, -1);
   return "/" + (segs.length ? segs.join("/") + "/" : "");
 }
 function decodeSeg(s){
@@ -2138,7 +2285,7 @@ function pathFor(name, sku){
 }
 function normalizeRoute(name, sku){
   if(name === "product") return { name:"product", sku:sku || "" };
-  if(name === "shop" || name === "drops" || name === "retailers" || name === "alerts") return { name:name, sku:"" };
+  if(name === "shop" || name === "drops" || name === "gifts" || name === "retailers" || name === "alerts") return { name:name, sku:"" };
   return { name:"home", sku:"" };
 }
 function routeFromSegments(segs){
@@ -2176,7 +2323,7 @@ function routeFromHref(href){
   var segs = rest.split("/").filter(function(s){ return s !== ""; });
   if(!segs.length) return normalizeRoute("home", "");
   if(segs[0] === "product") return normalizeRoute("product", decodeSeg(segs[1] || ""));
-  if(segs[0] === "shop" || segs[0] === "drops" || segs[0] === "retailers" || segs[0] === "alerts" || segs[0] === "home") return normalizeRoute(segs[0], "");
+  if(segs[0] === "shop" || segs[0] === "drops" || segs[0] === "gifts" || segs[0] === "retailers" || segs[0] === "alerts" || segs[0] === "home") return normalizeRoute(segs[0], "");
   return null;
 }
 /* One delegated handler sends every internal link through navigateTo,
@@ -2222,6 +2369,7 @@ function route(){
   if(name === "" || name === "home"){ app.innerHTML = homeHTML(); bindHome(); navName = "home"; }
   else if(name === "shop"){ app.innerHTML = shopHTML(); bindShop(); }
   else if(name === "drops"){ app.innerHTML = dropsHTML(); bindDrops(); }
+  else if(name === "gifts"){ app.innerHTML = giftsHTML(); bindGifts(); }
   else if(name === "retailers"){ app.innerHTML = retailersHTML(); bindRetailers(); }
   else if(name === "alerts"){ app.innerHTML = alertsHTML(); }
   else if(name === "product"){ app.innerHTML = productHTML(current.sku || ""); navName = "shop"; }
