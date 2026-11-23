@@ -180,6 +180,33 @@
   @media(min-width:768px){.r-note{grid-column:1/-1;padding-top:0}}
   .sc-note{margin-top:12px;font-family:var(--sans);font-size:13px;color:var(--dim)}
   .sc-rule{margin:12px 0 0;font-family:var(--sans);font-size:13px;color:var(--dim)}
+  /* Scorecard card frame (home only) */
+  .sc-card{border:1px solid var(--border);border-top:3px solid var(--green);background:#fff}
+  .sc-card::before{content:"";display:block;height:1px;background:var(--green);margin-top:2px}
+  .sc-card-head{padding:20px 16px 2px;text-align:center}
+  .sc-title{
+    margin:0;font-family:var(--serif);font-size:24px;font-weight:400;line-height:1.25;
+    letter-spacing:.22em;text-transform:uppercase;color:var(--green);padding-left:.22em;
+  }
+  @media(min-width:768px){.sc-title{font-size:27px}}
+  .sc-card-head .sc-sub{margin:8px 0 0;font-family:var(--sans);font-size:13px;color:var(--dim)}
+  .sc-card-head .sc-rule{margin:4px 0 0;text-align:center}
+  .sc-card .ruled.scorecard{margin-top:14px}
+  .sc-card .sc-note{
+    margin:0;padding:14px 16px 18px;border-top:1px solid var(--border);
+    font-family:var(--serif);font-style:italic;font-size:14px;line-height:1.6;
+    color:var(--dim);text-align:center;
+  }
+  .scorecard .cell-price,.scorecard .cell-low,.scorecard .cell-saves,.scorecard .r-head span{
+    font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;
+  }
+  .scorecard .cell-low{
+    border:1.25px solid var(--green);background:transparent;color:var(--green);
+  }
+  @media(min-width:768px){
+    .scorecard .r-head span.sc-saves-head{border-left:1px solid var(--border)}
+    .scorecard .r-cell.sc-saves{border-left:1px solid var(--border)}
+  }
   /* Scorecard on phone widths: stacked block, one line per store */
   @media(max-width:767px){
     .scorecard .r-first{padding:16px 16px 6px}
@@ -194,7 +221,7 @@
       font-size:11px;font-weight:600;letter-spacing:.08em;line-height:1.35;
     }
     .scorecard .r-cell .cell-low,.scorecard .r-cell .cell-price,.scorecard .r-cell .cell-saves{flex:0 0 auto}
-    .scorecard .r-cell.sc-saves{justify-content:flex-end;gap:8px;padding-top:7px;padding-bottom:6px}
+    .scorecard .r-cell.sc-saves{justify-content:flex-end;gap:8px;padding-top:7px;padding-bottom:6px;border-top:1px solid var(--border);margin-top:4px}
     .scorecard .r-cell.sc-saves .rlabel{flex:0 0 auto;text-align:right;color:var(--red)}
     .scorecard .r-cell.sc-saves .cell-saves{font-weight:700}
   }
@@ -783,7 +810,7 @@ function scorecardHTML(){
   var h = '<div class="ruled scorecard">';
   h += '<div class="r-head" ' + grid + ' aria-hidden="true"><span>PRODUCT</span>' +
     cols.map(function(c){ return '<span class="r">' + esc(c.toUpperCase()) + '</span>'; }).join("") +
-    '<span class="r">SAVES</span></div>';
+    '<span class="r sc-saves-head">SAVES</span></div>';
   rows.forEach(function(e, idx){
     var p = e.product;
     h += '<a class="r-row' + (idx > 0 ? ' bt' : '') + '" ' + grid + ' href="#/product/' + esc(p.skuId) + '" aria-label="View ' + esc(p.brand + " " + p.model) + '">' +
@@ -830,10 +857,13 @@ function homeHTML(){
     ' tracked storefronts. ' + multiStore + ' product' + (multiStore === 1 ? ' is' : 's are') +
     ' read at more than one store.</p>';
   h += '<section class="block" aria-label="The Scorecard" style="padding-top:48px">' +
-    sectionHead("The Scorecard", "Store listed prices, read " + fmtDate(LATEST_DATE) + ".") +
-    '<p class="sc-rule">The Scorecard lists the biggest price gaps between stores first.</p>' +
+    '<div class="sc-card">' +
+    '<div class="sc-card-head"><h2 class="sc-title">The Scorecard</h2>' +
+    '<p class="sc-sub">Store listed prices, read ' + fmtDate(LATEST_DATE) + '.</p>' +
+    '<p class="sc-rule">The Scorecard lists the biggest price gaps between stores first.</p></div>' +
     scorecardHTML() +
-    '<p class="sc-note">One cent decided the driver. That is why the record exists.</p></section>';
+    '<p class="sc-note">One cent decided the driver. That is why the record exists.</p>' +
+    '</div></section>';
   h += '<section class="block" aria-label="Price drops">' +
     sectionHead("Flagged today", "Price drops carry the red flag. Nothing else on the site wears it.");
   if(top.length === 0){
