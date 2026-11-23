@@ -257,6 +257,7 @@
   .tile .price{margin:8px 0 0;font-size:28px;line-height:1;color:var(--green)}
   .tile .pricenote{margin:8px 0 0;font-family:var(--sans);font-size:12px;line-height:1.6;color:var(--dim)}
   .tile .price .to{margin-left:8px;font-size:18px;color:var(--dim);vertical-align:middle}
+  .tile .price .per-ball{margin-left:8px;font-family:var(--sans);font-size:14px;color:var(--dim);vertical-align:middle;white-space:nowrap}
   .tile .storecount{margin:4px 0 0;font-family:var(--sans);font-size:12px;line-height:1.6;color:var(--dim)}
   .tile .saves{margin:8px 0 0;font-family:var(--sans);font-size:14px;font-weight:600;color:var(--red)}
   .tile .unpriced{margin:8px 0 0;font-size:18px;color:var(--dim)}
@@ -361,6 +362,10 @@
   .price-box .delivered-line{margin:8px 0 0;font-size:14px}
   .ruled .delivered-line{display:block;padding:2px 16px 12px}
   @media(min-width:768px){.ruled .delivered-line{grid-column:1/-1;padding-top:0}}
+  .per-ball-line{font-family:var(--sans);font-size:12px;line-height:1.6;color:var(--dim)}
+  .price-box .per-ball-line{margin:8px 0 0;font-size:14px}
+  .ruled .per-ball-line{display:block;padding:2px 16px 12px}
+  @media(min-width:768px){.ruled .per-ball-line{grid-column:1/-1;padding-top:0}}
   .price-box .saves{margin:8px 0 0;font-family:var(--sans);font-size:14px;font-weight:600;color:var(--red)}
   .recorded-low-line{margin:12px 0 0;font-family:var(--sans);font-size:14px;line-height:1.65;color:var(--dim)}
   .price-box .unpriced-big{margin:0;font-size:24px;color:var(--dim)}
@@ -805,6 +810,10 @@ function tileHTML(p){
     h += '<p class="price">' + money(p.lowestPriceCad);
     if(hasRange){
       h += '<span class="to"> to ' + money(p.highestPriceCad) + '</span>';
+    }
+    var perBallCard = perBallText(p, p.lowestPriceCad);
+    if(perBallCard){
+      h += '<span class="per-ball">' + perBallCard + '</span>';
     }
     h += '</p>';
     h += '<p class="pricenote">' + esc(p.lowestRetailer) + ' · Read ' + fmtDate(p.lowestReadDate || p.readDate) + '</p>';
@@ -1700,6 +1709,49 @@ function deliveredText(d){
   return 'Delivered ' + money(d.amount) + (d.free ? ' · Free' : '');
 }
 
+/* Per ball price, Balls products only. The pack count comes only from
+   what the product's own record states: the product name (brand and
+   model), the recorded features, the public notes and the subcategory.
+   An explicit stated count wins: a stated number of dozen counts that
+   many dozen, and a stated number with pack, pk, count or balls counts
+   that many balls, so the Kirkland Signature Performance Plus V3.0
+   24 Pack reads as 24. A bare dozen with no number stated counts 12,
+   which is how every Balls record in the catalogue states its count.
+   Digits that belong to a model name or a price in the notes (Pro V1,
+   TP5, e6, a $140 promo) state no count and are never read as one.
+   The figure is the read price divided by the count, rounded to the
+   nearest cent. A Balls product with no stated count, and every other
+   category, shows no figure. */
+function packCountOf(p){
+  if(!p || p.category !== "Balls") return null;
+  var texts = [p.brand + " " + p.model];
+  if(p.details){
+    (p.details.included || []).forEach(function(item){ texts.push(item); });
+    if(p.details.notIncluded) texts.push(p.details.notIncluded);
+    if(p.details.notStated) texts.push(p.details.notStated);
+  }
+  if(p.notes) texts.push(p.notes);
+  if(p.subcategory) texts.push(p.subcategory);
+  var i, m;
+  for(i = 0; i < texts.length; i++){
+    var t = String(texts[i]);
+    m = /(\d+)\s*-?\s*dozen\b/i.exec(t);
+    if(m) return parseInt(m[1], 10) * 12;
+    m = /\b(\d+)\s*-?\s*(?:pack|pk|count|balls?)\b/i.exec(t);
+    if(m) return parseInt(m[1], 10);
+  }
+  for(i = 0; i < texts.length; i++){
+    if(/\bdozen\b/i.test(String(texts[i]))) return 12;
+  }
+  return null;
+}
+function perBallText(p, price){
+  if(price == null) return null;
+  var count = packCountOf(p);
+  if(!count) return null;
+  return money(Math.round((price / count) * 100) / 100) + " per ball";
+}
+
 /* Product page */
 function productHTML(skuId){
   var p = BY_SKU[skuId];
@@ -1751,6 +1803,10 @@ function productHTML(skuId){
     var lowestDelivered = deliveredFor(p, p.lowestRetailer, p.lowestPriceCad);
     if(lowestDelivered){
       h += '<p class="delivered-line">' + deliveredText(lowestDelivered) + '</p>';
+    }
+    var lowestPerBall = perBallText(p, p.lowestPriceCad);
+    if(lowestPerBall){
+      h += '<p class="per-ball-line">' + lowestPerBall + '</p>';
     }
     if(lowestBuyUrl){
       h += '<div class="buy-wrap"><a class="buy-btn" href="' + esc(lowestBuyUrl) + '" target="_blank" rel="noreferrer">Buy at ' + esc(p.lowestRetailer) + '</a></div>';
@@ -1885,6 +1941,10 @@ function productHTML(skuId){
       var rowDelivered = deliveredFor(p, row.retailer, price);
       if(rowDelivered){
         h += '<span class="delivered-line">' + deliveredText(rowDelivered) + '</span>';
+      }
+      var rowPerBall = perBallText(p, price);
+      if(rowPerBall){
+        h += '<span class="per-ball-line">' + rowPerBall + '</span>';
       }
       if(row.productUrl && storeRows.length > 1){
         h += '<div class="buy-row"><a class="buy-btn" href="' + esc(row.productUrl) + '" target="_blank" rel="noreferrer">Buy at ' + esc(row.retailer) + '</a></div>';
