@@ -594,24 +594,51 @@ function audienceOf(p){
   return null;
 }
 
+/* A store read counts as recorded out of stock only where the record
+   says so: the product details carry a stock note read at that store
+   on that read date. Any other read is treated as in stock. */
+function readIsOutOfStock(details, retailer, readDate){
+  return !!(details && details.stockNote &&
+    details.sourceRetailer === retailer && details.sourceDate === readDate);
+}
+
 /* Enrichment mirrors the record rules: the current price at each store
-   is its latest priced read; the headline is the lowest of those. A
-   store stated was price is flagged when no other store matches it
+   is its latest priced read; the headline is the lowest of those. The
+   lowest mark is stock honest: it goes to the lowest priced current
+   read that is not recorded out of stock, and only when every current
+   read is recorded out of stock does the lowest read keep the mark.
+   A store stated was price is flagged when no other store matches it
    with its current price or its own stated was price; the product
    table prints it as stated, with the flag noted, and it earns no
    saving there. A drop is a fall in the record at the same store, as
    set out below. All figures are store listed prices. */
 function enrich(p){
+  var details = DETAILS_BY_SKU[p.skuId] || null;
   var priced = p.reads.filter(function(r){ return r.priceCad != null; });
   var latestByRetailer = {};
   priced.forEach(function(r){
     var cur = latestByRetailer[r.retailer];
     if(!cur || r.readDate > cur.readDate) latestByRetailer[r.retailer] = r;
   });
-  var lowest = null, name;
+  var oosByRetailer = {};
+  for(var oname in latestByRetailer){
+    oosByRetailer[oname] = readIsOutOfStock(details, oname, latestByRetailer[oname].readDate);
+  }
+  var lowest = null, lowestAny = null, name;
   for(name in latestByRetailer){
     var lr = latestByRetailer[name];
-    if(lowest == null || lr.priceCad < lowest.priceCad) lowest = lr;
+    if(lowestAny == null || lr.priceCad < lowestAny.priceCad) lowestAny = lr;
+    if(!oosByRetailer[name] && (lowest == null || lr.priceCad < lowest.priceCad)) lowest = lr;
+  }
+  if(lowest == null) lowest = lowestAny;
+  var lowestIsOos = lowest ? !!oosByRetailer[lowest.retailer] : false;
+  var cheaperOos = null;
+  if(lowest && !lowestIsOos){
+    for(name in latestByRetailer){
+      var cand = latestByRetailer[name];
+      if(oosByRetailer[name] && cand.priceCad < lowest.priceCad &&
+        (cheaperOos == null || cand.priceCad < cheaperOos.priceCad)) cheaperOos = cand;
+    }
   }
   var current = lowest ? lowest.priceCad : null;
   var storeCount = Object.keys(latestByRetailer).length;
@@ -669,10 +696,13 @@ function enrich(p){
     skuId:p.skuId, category:p.category, subcategory:p.subcategory, brand:p.brand,
     model:p.model, generation:p.generation, audience:audienceOf(p), anchorRetailer:p.anchorRetailer,
     priceCad:p.priceCad, wasPriceCad:p.wasPriceCad, readDate:p.readDate, notes:p.notes,
-    reads:p.reads, photo:p.photo || null, details:DETAILS_BY_SKU[p.skuId] || null,
+    reads:p.reads, photo:p.photo || null, details:details,
     lowestPriceCad:current,
     lowestRetailer:lowest ? lowest.retailer : null,
     lowestReadDate:lowest ? lowest.readDate : null,
+    lowestOutOfStock:lowestIsOos,
+    cheaperOosRetailer:cheaperOos ? cheaperOos.retailer : null,
+    cheaperOosPriceCad:cheaperOos ? cheaperOos.priceCad : null,
     storeCount:storeCount,
     highestPriceCad:highestPrice,
     highPriceCad:high,
@@ -857,7 +887,7 @@ function scorecardHTML(){
         return;
       }
       h += '<div class="r-cell"><span class="rlabel">' + esc(c.toUpperCase()) + '</span>';
-      if(read.priceCad === e.lowest){
+      if(c === p.lowestRetailer){
         h += '<span class="cell-low">' + money(read.priceCad) + '</span>';
       } else {
         h += '<span class="cell-price">' + money(read.priceCad) + '</span>';
@@ -1644,8 +1674,11 @@ function productHTML(skuId){
     if(p.details && p.details.offer){
       h += '<p class="offer-line">Offer as stated: ' + esc(p.details.offer) + '</p>';
     }
-    if(p.details && p.details.stockNote){
+    if(p.lowestOutOfStock && p.details && p.details.stockNote){
       h += '<p class="offer-line">' + esc(p.details.stockNote) + '</p>';
+    } else if(p.cheaperOosRetailer){
+      h += '<p class="offer-line">Cheaper at ' + esc(p.cheaperOosRetailer) + ', ' +
+        money(p.cheaperOosPriceCad) + ', recorded out of stock.</p>';
     }
   } else {
     h += '<p class="unpriced-big">Price not yet recorded</p>' +
@@ -1721,7 +1754,7 @@ function productHTML(skuId){
     storeRows.forEach(function(row, idx){
       var m = RETAILER_BY_NAME[row.retailer];
       var price = row.current.priceCad;
-      var isLowest = price === lowestStorePrice;
+      var isLowest = row.retailer === p.lowestRetailer;
       h += '<div class="r-row' + (idx > 0 ? ' bt' : '') + '" ' + grid + '>' +
         '<div class="r-first"><span class="sname">' + esc(row.retailer.toUpperCase()) + '</span>';
       if(m){
@@ -1729,6 +1762,9 @@ function productHTML(skuId){
       }
       if(row.saleEndDate){
         h += '<span class="snote">Sale ends ' + esc(fmtDay(row.saleEndDate)) + '</span>';
+      }
+      if(readIsOutOfStock(p.details, row.retailer, row.current.readDate)){
+        h += '<span class="snote">' + esc(p.details.stockNote) + '</span>';
       }
       h += '</div>';
       h += '<div class="r-cells" ' + mobileGrid + '>';
