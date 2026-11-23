@@ -362,6 +362,7 @@
   .ruled .delivered-line{display:block;padding:2px 16px 12px}
   @media(min-width:768px){.ruled .delivered-line{grid-column:1/-1;padding-top:0}}
   .price-box .saves{margin:8px 0 0;font-family:var(--sans);font-size:14px;font-weight:600;color:var(--red)}
+  .recorded-low-line{margin:12px 0 0;font-family:var(--sans);font-size:14px;line-height:1.65;color:var(--dim)}
   .price-box .unpriced-big{margin:0;font-size:24px;color:var(--dim)}
   .read-cards{display:grid;gap:16px;margin-top:20px}
   .read-card{border:1px solid var(--border);background:#fff;padding:16px}
@@ -1731,6 +1732,17 @@ function productHTML(skuId){
       }
     }
   }
+  /* Recorded low: the lowest price in the product's own dated reads
+     across every store, the store that read it, and the first date it
+     was read at that price. */
+  var recLow = null;
+  p.reads.forEach(function(r){
+    if(r.priceCad == null) return;
+    if(recLow == null || r.priceCad < recLow.priceCad ||
+      (r.priceCad === recLow.priceCad && r.readDate < recLow.readDate)){
+      recLow = { priceCad:r.priceCad, retailer:r.retailer, readDate:r.readDate };
+    }
+  });
   h += '<div class="price-box">';
   if(p.lowestPriceCad != null){
     h += '<p class="kicker">LOWEST READ IN THE RECORD</p>' +
@@ -1761,6 +1773,17 @@ function productHTML(skuId){
       '<p class="detail">No clean price read exists for this model yet. It stays on the list with no price rather than a guessed one.</p>';
   }
   h += '</div>';
+  if(recLow && p.lowestPriceCad != null){
+    var atRecLow = cents(p.lowestPriceCad) === cents(recLow.priceCad) &&
+      p.lowestRetailer === recLow.retailer;
+    h += '<p class="recorded-low-line">' +
+      (atRecLow
+        ? 'Now at its recorded low, ' + money(recLow.priceCad) + ' at ' + esc(recLow.retailer) +
+          ', first read ' + fmtDate(recLow.readDate) + '.'
+        : 'Recorded low ' + money(recLow.priceCad) + ' at ' + esc(recLow.retailer) +
+          ', first read ' + fmtDate(recLow.readDate) + '.') +
+      '</p>';
+  }
 
   /* One row per store at its current read. The WAS cell basis is the
      current read stated was price when it carries one, otherwise the
