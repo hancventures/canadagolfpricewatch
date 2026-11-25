@@ -371,6 +371,16 @@
   .ruled .per-ball-line{display:block;padding:2px 16px 12px}
   @media(min-width:768px){.ruled .per-ball-line{grid-column:1/-1;padding-top:0}}
   .price-box .saves{margin:8px 0 0;font-family:var(--sans);font-size:14px;font-weight:600;color:var(--red)}
+  .watch-box{margin-top:20px;border-top:1px solid var(--border);padding-top:16px}
+  .watch-box .watch-line{margin:0;font-family:var(--sans);font-size:14px;line-height:1.65}
+  .watch-box .watch-cta{margin-top:12px}
+  .watch-btn{
+    display:flex;width:100%;align-items:center;justify-content:center;background:var(--green);color:#F3EFDF;
+    text-decoration:none;padding:12px 24px;font-family:var(--sans);font-size:14px;font-weight:600;text-align:center;min-height:44px;
+  }
+  .watch-btn:hover{background:var(--green-soft)}
+  .watch-btn:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  .watch-box .watch-privacy{margin:10px 0 0;font-family:var(--sans);font-size:12px;line-height:1.6;color:var(--dim)}
   .recorded-low-line{margin:12px 0 0;font-family:var(--sans);font-size:14px;line-height:1.65;color:var(--dim)}
   .price-box .unpriced-big{margin:0;font-size:24px;color:var(--dim)}
   .read-cards{display:grid;gap:16px;margin-top:20px}
@@ -2241,6 +2251,19 @@ function productHTML(skuId){
     h += '<p class="unpriced-big">Price not yet recorded</p>' +
       '<p class="detail">No clean price read exists for this model yet. It stays on the list with no price rather than a guessed one.</p>';
   }
+  var watchName = productTitle(p.brand, p.model);
+  var watchSubject = "Product watch: " + watchName + " (" + p.skuId + ")";
+  var watchBody = "Please watch this product for me and email me when it records a new low.\n\n" +
+    "Product: " + watchName + "\n" +
+    "SKU: " + p.skuId + "\n\n" +
+    "My email address is the one I am sending from.";
+  var watchMail = 'mailto:hancventures@gmail.com?subject=' + encodeURIComponent(watchSubject) +
+    '&amp;body=' + encodeURIComponent(watchBody);
+  h += '<div class="watch-box">' +
+    '<p class="watch-line">Get an email when this product records a new low.</p>' +
+    '<div class="watch-cta"><a class="watch-btn" href="' + watchMail + '">Watch this product</a></div>' +
+    '<p class="watch-privacy">Your address is used only for these alerts.</p>' +
+    '</div>';
   h += '</div>';
   if(recLow && p.lowestPriceCad != null){
     var atRecLow = cents(p.lowestPriceCad) === cents(recLow.priceCad) &&
