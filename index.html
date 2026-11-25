@@ -169,6 +169,7 @@
   @media(min-width:768px){.cell-saves{font-size:16px}}
   .cell-read{white-space:nowrap;font-family:var(--sans);font-size:13px}
   @media(min-width:768px){.cell-read{font-size:14px}}
+  .oos-line{display:block;font-family:var(--sans);font-size:12px;line-height:1.6;color:var(--dim)}
   .lowest-tag{
     font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.18em;
     color:var(--green);white-space:nowrap;vertical-align:middle;margin-left:8px;
@@ -603,6 +604,34 @@ function fmtDay(iso){
 }
 function cleanShippingLine(raw){
   return String(raw == null ? "" : raw).replace(/\s+stated on site\.?\s*$/i, "").trim();
+}
+/* The store block shipping line, cleaned for a row that also carries
+   its own Pickup line below: the pickup clause comes out of the
+   shipping line so the same fact never prints twice in one block.
+   The pickup clause can be a whole segment ("free in store pickup")
+   or trail a shipping fact ("Free shipping over $99 and free in
+   store pickup"). Cut at the word pickup, then walk back over the
+   clause's own filler words (free, in store, and, also) so only the
+   shipping fact before it, if any, survives. */
+function rowShippingLine(raw, hasPickupLine){
+  var cleaned = cleanShippingLine(raw);
+  if(!hasPickupLine) return cleaned;
+  var parts = cleaned.split(";").map(function(part){ return part.trim(); })
+    .filter(function(part){ return part !== ""; });
+  var PICKUP_FILLER = { "free":1, "in":1, "store":1, "in-store":1, "and":1, "also":1, "with":1, "plus":1, "local":1, "or":1 };
+  var kept = [];
+  parts.forEach(function(part){
+    var idx = part.toLowerCase().indexOf("pickup");
+    if(idx === -1){ kept.push(part); return; }
+    var words = part.slice(0, idx).replace(/[,\s]+$/, "").trim().split(/\s+/)
+      .filter(function(w){ return w !== ""; });
+    while(words.length > 0 && PICKUP_FILLER[words[words.length - 1].toLowerCase()]){
+      words.pop();
+    }
+    var before = words.join(" ").replace(/[,\s]+$/, "").trim();
+    if(before) kept.push(before);
+  });
+  return kept.join("; ");
 }
 
 /* The inventory notes column in the record is internal bookkeeping:
@@ -2129,7 +2158,7 @@ function deliveredFor(p, retailer, price){
   return null;
 }
 function deliveredText(d){
-  return 'Delivered ' + money(d.amount) + (d.free ? ' · Free' : '');
+  return 'Delivered ' + money(d.amount);
 }
 
 /* Per ball price, Balls products only. The pack count comes only from
@@ -2193,98 +2222,14 @@ function productHTML(skuId){
   }
   h += '</div>';
   h += '<h2 class="product-title">' + esc(productTitle(p.brand, p.model)) + '</h2>' +
-    '<p class="product-meta">' + esc(p.brand) + ' · ' + esc(p.category) + (p.category === "Balls" ? ' · ' + esc(p.subcategory) : '') + (p.generation && p.generation.trim() ? ' · ' + esc(p.generation) + ' generation' : '') + '</p>';
-  var lowestBuyUrl = "";
-  if(p.lowestRetailer){
-    var lowestReads = p.reads.filter(function(r){ return r.retailer === p.lowestRetailer; })
-      .slice().sort(function(a,b){ return b.readDate.localeCompare(a.readDate); });
-    var lowestCurrent = null;
-    lowestReads.forEach(function(r){ if(lowestCurrent == null && r.priceCad != null) lowestCurrent = r; });
-    if(lowestCurrent){
-      lowestBuyUrl = lowestCurrent.productUrl || "";
-      if(!lowestBuyUrl){
-        lowestReads.forEach(function(r){ if(!lowestBuyUrl && r.productUrl) lowestBuyUrl = r.productUrl; });
-      }
-    }
-  }
-  /* Recorded low: the lowest price in the product's own dated reads
-     across every store, the store that read it, and the first date it
-     was read at that price. */
-  var recLow = null;
-  p.reads.forEach(function(r){
-    if(r.priceCad == null) return;
-    if(recLow == null || r.priceCad < recLow.priceCad ||
-      (r.priceCad === recLow.priceCad && r.readDate < recLow.readDate)){
-      recLow = { priceCad:r.priceCad, retailer:r.retailer, readDate:r.readDate };
-    }
-  });
-  h += '<div class="price-box">';
-  if(p.lowestPriceCad != null){
-    h += '<p class="kicker">LOWEST READ IN THE RECORD</p>' +
-      '<p class="big">' + money(p.lowestPriceCad) + '</p>' +
-      '<p class="detail">At ' + esc(p.lowestRetailer) + ', read ' + fmtDate(p.lowestReadDate || p.readDate) + '.</p>';
-    var lowestDelivered = deliveredFor(p, p.lowestRetailer, p.lowestPriceCad);
-    if(lowestDelivered){
-      h += '<p class="delivered-line">' + deliveredText(lowestDelivered) + '</p>';
-    }
-    var lowestPerBall = perBallText(p, p.lowestPriceCad);
-    if(lowestPerBall){
-      h += '<p class="per-ball-line">' + lowestPerBall + '</p>';
-    }
-    if(lowestBuyUrl){
-      h += '<div class="buy-wrap"><a class="buy-btn" href="' + esc(lowestBuyUrl) + '" target="_blank" rel="noreferrer">Buy at ' + esc(p.lowestRetailer) + '</a></div>';
-    }
-    if(p.isDrop && p.highPriceCad != null){
-      h += '<p class="saves">Saves ' + money(p.savingCad) + ' against the recorded high of ' +
-        money(p.highPriceCad) + ' at ' + esc(p.lowestRetailer) + '.</p>';
-    }
-    if(p.details && p.details.offer){
-      h += '<p class="offer-line">Offer as stated: ' + esc(p.details.offer) + '</p>';
-    }
-    if(p.lowestOutOfStock && p.details && p.details.stockNote){
-      h += '<p class="offer-line">' + esc(p.details.stockNote) + '</p>';
-    } else if(p.cheaperOosRetailer){
-      h += '<p class="offer-line">Cheaper at ' + esc(p.cheaperOosRetailer) + ', ' +
-        money(p.cheaperOosPriceCad) + ', recorded out of stock.</p>';
-    }
-  } else {
-    h += '<p class="unpriced-big">Price not yet recorded</p>' +
-      '<p class="detail">No clean price read exists for this model yet. It stays on the list with no price rather than a guessed one.</p>';
-  }
-  var watchName = productTitle(p.brand, p.model);
-  var watchSubject = "Product watch: " + watchName + " (" + p.skuId + ")";
-  var watchBody = "Please watch this product for me and email me when it records a new low.\n\n" +
-    "Product: " + watchName + "\n" +
-    "SKU: " + p.skuId + "\n\n" +
-    "My email address is the one I am sending from.";
-  var watchMail = 'mailto:hancventures@gmail.com?subject=' + encodeURIComponent(watchSubject) +
-    '&amp;body=' + encodeURIComponent(watchBody);
-  h += '<div class="watch-box">' +
-    '<p class="watch-line">Get an email when this product records a new low.</p>' +
-    '<div class="watch-cta"><a class="watch-btn" href="' + watchMail + '">Watch this product</a></div>' +
-    '<p class="watch-privacy">Your address is used only for these alerts.</p>' +
-    '</div>';
-  h += '</div>';
-  if(recLow && p.lowestPriceCad != null){
-    var atRecLow = cents(p.lowestPriceCad) === cents(recLow.priceCad) &&
-      p.lowestRetailer === recLow.retailer;
-    h += '<p class="recorded-low-line">' +
-      (atRecLow
-        ? 'Now at its recorded low, ' + money(recLow.priceCad) + ' at ' + esc(recLow.retailer) +
-          ', first read ' + fmtDate(recLow.readDate) + '.'
-        : 'Recorded low ' + money(recLow.priceCad) + ' at ' + esc(recLow.retailer) +
-          ', first read ' + fmtDate(recLow.readDate) + '.') +
-      '</p>';
-  }
+    '<p class="product-meta">' + esc(p.brand) + ' · ' + esc(p.category) + (p.category === "Balls" ? ' · ' + esc(p.subcategory) : '') + '</p>';
 
-  /* One row per store at its current read. The WAS cell basis is the
-     current read stated was price when it carries one, otherwise the
-     highest price earlier recorded at that same store. SAVES is that
-     basis minus the current price, blank when there is no basis above
-     the current price, and blank with a note printed under the price
-     row when the stated was price is not matched at any other store.
-     When no store on the page shows a saving, the SAVES column is
-     left out of every store block on the page, header included. */
+  /* One row per store: that store's current (most recent) priced read.
+     Each row has one saving basis, shown in its WAS cell: the current
+     read's stated was price when it carries one, otherwise the highest
+     price this product was earlier recorded at, at that same store.
+     SAVES is that basis minus the current price, and blank when there
+     is no basis above the current price. Never another store's figure. */
   var readsByStore = {}, storeOrder = [];
   p.reads.forEach(function(r){
     if(!readsByStore[r.retailer]){ readsByStore[r.retailer] = []; storeOrder.push(r.retailer); }
@@ -2304,9 +2249,16 @@ function productHTML(skuId){
         if(basis == null || r.priceCad > basis) basis = r.priceCad;
       });
     }
+    /* Unsupported original price rule: when the basis is this store's
+       stated was price and no other store matches that was price, the
+       was still prints and the row carries the unmatched note below
+       (when it is the only was on the page). The row's saves figure
+       still shows against that stated was: every row shows its saves
+       figure, and it stays blank only when the row price equals its
+       was price (no basis above the current price). */
     var unsupportedWas = current.wasPriceCad != null &&
       p.unsupportedWasRetailers.indexOf(retailer) !== -1;
-    var savingCad = (!unsupportedWas && basis != null && basis > current.priceCad)
+    var savingCad = (basis != null && basis > current.priceCad)
       ? Math.round((basis - current.priceCad) * 100) / 100 : 0;
     /* Single read big drop guard (Troy, approved Nov 24, 2026): a
        saving of 40 percent or more against this store's basis does
@@ -2341,18 +2293,116 @@ function productHTML(skuId){
   });
   storeRows.sort(function(a,b){ return a.current.priceCad - b.current.priceCad; });
   var hasAnySaving = storeRows.some(function(r){ return r.savingCad > 0; });
-  var lowestStorePrice = storeRows.length ? storeRows[0].current.priceCad : null;
-  var highestStorePrice = storeRows.length ? storeRows[storeRows.length - 1].current.priceCad : null;
-  var summaryLine = null;
-  if(storeRows.length === 1) summaryLine = "Read at 1 store.";
-  else if(storeRows.length > 1){
-    summaryLine = "Read at " + storeRows.length + " stores. Prices run " +
-      money(lowestStorePrice) + " to " + money(highestStorePrice) + ".";
-  }
-
+  /* The unmatched original price note only means anything when reads
+     exist at two or more stores and just one store shows an original
+     price. On a one store record there is no other store to compare
+     against, so the note never renders. */
   var storesShowingWas = storeRows.filter(function(r){ return r.current.wasPriceCad != null; }).length;
-  h += '<section class="block" aria-label="Every retailer read">' +
-    sectionHead("Every read for this model");
+  var showUnmatchedWasNote = storeOrder.length >= 2 && storesShowingWas === 1;
+  var summaryLine = storeRows.length
+    ? "Prices run " + money(storeRows[0].current.priceCad) + " to " +
+      money(storeRows[storeRows.length - 1].current.priceCad) + "."
+    : null;
+
+  /* Featured store for the panel: the marked lowest read (lowest shelf
+     price), except when two or more stores tie at that lowest shelf
+     price. On a tie the panel features the tied store with the lowest
+     delivered total, the panel label names the delivered basis, and
+     the panel figure is that store's delivered total. When no tied
+     store carries a computable delivered figure, the marked lowest
+     read keeps the panel as before. */
+  var markedLowestRow = null;
+  storeRows.forEach(function(r){
+    if(markedLowestRow == null && r.retailer === p.lowestRetailer) markedLowestRow = r;
+  });
+  if(markedLowestRow == null && storeRows.length) markedLowestRow = storeRows[0];
+  var featuredRow = markedLowestRow;
+  var featuredDeliveredCad = null;
+  var panelIsDelivered = false;
+  if(p.lowestPriceCad != null){
+    var lowestCents = cents(p.lowestPriceCad);
+    var tiedRows = storeRows.filter(function(r){
+      return r.current.priceCad != null && cents(r.current.priceCad) === lowestCents;
+    });
+    if(tiedRows.length >= 2){
+      var bestRow = null, bestDelivered = null;
+      tiedRows.forEach(function(r){
+        var d = deliveredFor(p, r.retailer, r.current.priceCad);
+        if(!d) return;
+        if(bestDelivered == null || d.amount < bestDelivered){
+          bestDelivered = d.amount;
+          bestRow = r;
+        }
+      });
+      if(bestRow && bestDelivered != null){
+        featuredRow = bestRow;
+        featuredDeliveredCad = bestDelivered;
+        panelIsDelivered = true;
+      }
+    }
+  }
+  var featuredDelivered = featuredRow
+    ? deliveredFor(p, featuredRow.retailer, featuredRow.current.priceCad)
+    : null;
+  var lowestPerBall = perBallText(p, p.lowestPriceCad);
+
+  h += '<div class="price-box">';
+  if(p.lowestPriceCad != null){
+    h += '<p class="kicker">' + (panelIsDelivered ? 'LOWEST DELIVERED PRICE WE HAVE READ' : 'LOWEST PRICE WE HAVE READ') + '</p>' +
+      '<p class="big">' + money(panelIsDelivered && featuredDeliveredCad != null ? featuredDeliveredCad : p.lowestPriceCad) + '</p>';
+    if(lowestPerBall){
+      h += '<p class="per-ball-line">' + lowestPerBall + '</p>';
+    }
+    h += '<p class="detail">At ' + esc(featuredRow ? featuredRow.retailer : p.lowestRetailer) + ', read ' +
+      fmtDate(featuredRow ? featuredRow.current.readDate : (p.lowestReadDate || p.readDate)) + '.</p>';
+    if(!panelIsDelivered && featuredDelivered){
+      h += '<p class="delivered-line">' + deliveredText(featuredDelivered) + '</p>';
+    }
+    if(p.cheaperOosRetailer){
+      h += '<p class="offer-line">Cheaper at ' + esc(p.cheaperOosRetailer) + ', ' +
+        money(p.cheaperOosPriceCad) + ', recorded out of stock.</p>';
+    }
+    if(featuredRow && featuredRow.productUrl){
+      h += '<div class="buy-wrap"><a class="buy-btn" href="' + esc(featuredRow.productUrl) + '" target="_blank" rel="noreferrer">Buy at ' + esc(featuredRow.retailer) + '</a></div>';
+    }
+    if(p.isDrop && p.highPriceCad != null){
+      h += '<p class="saves">Saves ' + money(p.savingCad) + ' against the recorded high of ' +
+        money(p.highPriceCad) + ' at ' + esc(p.lowestRetailer) + '.</p>';
+    }
+    if(p.details && p.details.offer){
+      h += '<p class="offer-line">Offer as stated: ' + esc(p.details.offer) + '</p>';
+    }
+    /* The stock note stands in this block only when the marked lowest
+       read is itself the recorded out of stock read (every read out of
+       stock, so the lowest keeps the mark). When the mark sits on an
+       in stock read, the out of stock read carries its own note in
+       the store list below, and the cheaper line above states it
+       here. */
+    if(p.details && p.details.stockNote && p.lowestRetailer != null &&
+      p.lowestOutOfStock && p.details.sourceRetailer === p.lowestRetailer){
+      h += '<p class="offer-line">' + esc(p.details.stockNote) + '</p>';
+    }
+  } else {
+    h += '<p class="unpriced-big">Price not yet recorded</p>' +
+      '<p class="detail">No clean price read exists for this model yet. It stays on the list with no price rather than a guessed one.</p>';
+  }
+  var watchName = productTitle(p.brand, p.model);
+  var watchSubject = "Product watch: " + watchName + " (" + p.skuId + ")";
+  var watchBody = "Please watch this product for me and email me when it records a new low.\n\n" +
+    "Product: " + watchName + "\n" +
+    "SKU: " + p.skuId + "\n\n" +
+    "My email address is the one I am sending from.";
+  var watchMail = 'mailto:hancventures@gmail.com?subject=' + encodeURIComponent(watchSubject) +
+    '&amp;body=' + encodeURIComponent(watchBody);
+  h += '<div class="watch-box">' +
+    '<p class="watch-line">Get an email when this product records a new low.</p>' +
+    '<div class="watch-cta"><a class="watch-btn" href="' + watchMail + '">Watch this product</a></div>' +
+    '<p class="watch-privacy">Your address is used only for these alerts.</p>' +
+    '</div>';
+  h += '</div>';
+
+  h += '<section class="block" aria-label="Every price we have read">' +
+    sectionHead("Every price we have read");
   if(summaryLine) h += '<p class="summary-line">' + esc(summaryLine) + '</p>';
   if(storeRows.length){
     var grid = 'style="grid-template-columns:' + (hasAnySaving
@@ -2367,20 +2417,21 @@ function productHTML(skuId){
     storeRows.forEach(function(row, idx){
       var m = RETAILER_BY_NAME[row.retailer];
       var price = row.current.priceCad;
-      var isLowest = row.retailer === p.lowestRetailer;
+      /* The ring and the LOWEST tag sit on the featured store's row:
+         the store the panel above names (the marked lowest read, or,
+         on a lowest price tie, the tied store with the lowest
+         delivered total). */
+      var isLowest = featuredRow != null && row.retailer === featuredRow.retailer;
       h += '<div class="r-row' + (idx > 0 ? ' bt' : '') + '" ' + grid + '>' +
         '<div class="r-first"><span class="sname">' + esc(row.retailer.toUpperCase()) + '</span>';
       if(m){
-        h += '<span class="snote">Shipping: ' + esc(cleanShippingLine(m.freeShipping || "Not stated")) + '</span>';
+        h += '<span class="snote">Shipping: ' + esc(rowShippingLine(m.freeShipping || "Not stated", PICKUP_TERMS[row.retailer] != null)) + '</span>';
         if(PICKUP_TERMS[row.retailer]){
           h += '<span class="snote">Pickup: ' + esc(PICKUP_TERMS[row.retailer]) + '</span>';
         }
       }
       if(row.saleEndDate){
         h += '<span class="snote">Sale ends ' + esc(fmtDay(row.saleEndDate)) + '</span>';
-      }
-      if(readIsOutOfStock(p.details, row.retailer, row.current.readDate)){
-        h += '<span class="snote">' + esc(p.details.stockNote) + '</span>';
       }
       h += '</div>';
       h += '<div class="r-cells" ' + mobileGrid + '>';
@@ -2397,20 +2448,27 @@ function productHTML(skuId){
         h += '</div>';
       }
       h += '<div class="r-cell"><span class="rlabel">READ</span>' +
-        '<span class="cell-read">' + fmtDate(row.current.readDate) + '</span></div>';
-      h += '</div>';
-      var rowDelivered = deliveredFor(p, row.retailer, price);
-      if(rowDelivered){
-        h += '<span class="delivered-line">' + deliveredText(rowDelivered) + '</span>';
+        '<span class="cell-read">' + fmtDate(row.current.readDate) + '</span>';
+      if(readIsOutOfStock(p.details, row.retailer, row.current.readDate)){
+        h += '<span class="oos-line">Out of stock</span>';
       }
+      h += '</div>';
+      h += '</div>';
       var rowPerBall = perBallText(p, price);
       if(rowPerBall){
         h += '<span class="per-ball-line">' + rowPerBall + '</span>';
       }
-      if(row.productUrl && storeRows.length > 1){
+      var rowDelivered = deliveredFor(p, row.retailer, price);
+      if(rowDelivered){
+        h += '<span class="delivered-line">' + deliveredText(rowDelivered) + '</span>';
+      }
+      /* The featured store's row carries no Buy button: the panel
+         block directly above is that store's action. Every other
+         store's row keeps its own button. */
+      if(row.productUrl && row.retailer !== (featuredRow ? featuredRow.retailer : null)){
         h += '<div class="buy-row"><a class="buy-btn" href="' + esc(row.productUrl) + '" target="_blank" rel="noreferrer">Buy at ' + esc(row.retailer) + '</a></div>';
       }
-      if(storeRows.length >= 2 && storesShowingWas === 1 && row.current.wasPriceCad != null){
+      if(row.unsupportedWas && showUnmatchedWasNote){
         h += '<span class="r-note">Original price not matched at any other store.</span>';
       }
       h += '</div>';
@@ -2420,7 +2478,7 @@ function productHTML(skuId){
     h += '<p class="empty-note" style="margin-top:16px">No price reads recorded yet for this model.</p>';
   }
 
-  /* Dated record, folded for display: consecutive reads at the same
+  /* Price history, folded for display: consecutive reads at the same
      store with the same price become one row spanning the date range,
      and a new row starts only when the price changes. The full daily
      record stays in the data underneath. Newest first. */
@@ -2451,26 +2509,45 @@ function productHTML(skuId){
     });
   });
   history.sort(function(a,b){ return b.endDate.localeCompare(a.endDate); });
-  if(history.length){
-    h += '<h3 class="history-head">THE DATED RECORD</h3><ul class="history">' +
-      history.map(function(r){
+  /* Price history shows only real price changes: a folded read whose
+     price equals that store's current price in the table is the
+     present, not history, so it drops out of the list. When no read
+     differs, the section does not render at all. */
+  var currentPriceByRetailer = {};
+  storeRows.forEach(function(r){ currentPriceByRetailer[r.retailer] = r.current.priceCad; });
+  var priceHistory = history.filter(function(r){
+    return r.priceCad != null && currentPriceByRetailer[r.retailer] !== r.priceCad;
+  });
+  if(priceHistory.length){
+    h += '<h3 class="history-head">Price history</h3><ul class="history">' +
+      priceHistory.map(function(r){
         return '<li><span class="hwhen">' + fmtRange(r.startDate, r.endDate) + ' · ' + esc(r.retailer) + '</span>' +
           '<span class="hprice">' + (r.priceCad != null ? money(r.priceCad) : 'Price not yet recorded') + '</span></li>';
       }).join("") + '</ul>';
   }
   h += '</section>';
 
-  if(p.notes){
-    var noteSegments = splitNoteSegments(p.notes);
-    h += '<section class="block" aria-label="Notes from the record">' +
-      sectionHead("Notes from the record") +
+  /* Notes as rendered: when a comparison row on this page already
+     shows a sale end, a leading "Sale ends <date>." sentence in the
+     note states the same fact twice, so it drops at render and the
+     rest of the note stands exactly as recorded. When the note is
+     only that sentence, no Notes section renders. */
+  var anyRowSaleEnd = storeRows.some(function(r){ return r.saleEndDate !== ""; });
+  var displayNote = p.notes || "";
+  if(anyRowSaleEnd){
+    displayNote = displayNote.replace(/^Sale ends [^.]*\.\s*/i, "").trim();
+  }
+  if(displayNote){
+    var noteSegments = splitNoteSegments(displayNote);
+    h += '<section class="block" aria-label="Notes">' +
+      sectionHead("Notes") +
       (noteSegments
         ? noteSegments.map(function(seg){ return '<p class="notes-text">' + esc(seg) + '</p>'; }).join("")
-        : '<p class="notes-text">' + esc(p.notes) + '</p>') +
+        : '<p class="notes-text">' + esc(displayNote) + '</p>') +
       '</section>';
   }
 
-  if(p.details){
+  if(p.details && (p.details.included.length > 0 || p.details.notIncluded !== "" || p.details.notStated !== "")){
     var dsrc = esc(p.details.sourceRetailer) + ', read ' + fmtDate(p.details.sourceDate) + '.';
     h += '<section class="block" aria-label="Features">' +
       sectionHead("Features", "As stated on the retailer page.") +
